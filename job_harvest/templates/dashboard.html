@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow">수집 서버 상태</p>
+    <h1>주기 수집과 검색 조건을 한 화면에서 제어합니다.</h1>
+    <p class="hero-copy">
+      현재 저장된 공고 {{ summary.total_postings }}건, 실행 기록 {{ summary.total_runs }}회입니다.
+      {% if summary.is_collecting %}수집 작업이 진행 중입니다.{% else %}지금은 대기 상태입니다.{% endif %}
+    </p>
+  </div>
+  <div class="hero-actions">
+    <button id="run-now-button" class="button primary">지금 수집</button>
+    <a class="button ghost" href="/settings">설정 열기</a>
+  </div>
+</section>
+
+<section class="card-grid">
+  <article class="card stat">
+    <span class="label">저장 공고</span>
+    <strong>{{ summary.total_postings }}</strong>
+  </article>
+  <article class="card stat">
+    <span class="label">실행 기록</span>
+    <strong>{{ summary.total_runs }}</strong>
+  </article>
+  <article class="card stat">
+    <span class="label">스케줄 상태</span>
+    <strong>{{ '활성' if settings.schedule_enabled else '비활성' }}</strong>
+  </article>
+  <article class="card stat">
+    <span class="label">다음 실행 슬롯</span>
+    <strong>{{ summary.scheduler.jobs[0].next_run_at if summary.scheduler.jobs else '예약 없음' }}</strong>
+  </article>
+</section>
+
+<section class="panel-grid">
+  <article class="panel">
+    <div class="panel-header">
+      <h2>사이트별 저장 수</h2>
+    </div>
+    <div class="site-list">
+      {% for row in summary.site_counts %}
+      <div class="site-row">
+        <span>{{ row.site_name }}</span>
+        <strong>{{ row.count }}</strong>
+      </div>
+      {% else %}
+      <p class="muted">아직 저장된 공고가 없습니다.</p>
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="panel">
+    <div class="panel-header">
+      <h2>예약 작업</h2>
+    </div>
+    <div class="run-list">
+      {% for job in summary.scheduler.jobs %}
+      <div class="run-row">
+        <div>
+          <strong>{{ job.job_id }}</strong>
+          <p>{{ job.description }}</p>
+        </div>
+        <span>{{ job.next_run_at or '대기 없음' }}</span>
+      </div>
+      {% else %}
+      <p class="muted">현재 등록된 예약이 없습니다.</p>
+      {% endfor %}
+    </div>
+  </article>
+</section>
+
+<section class="panel">
+  <div class="panel-header">
+    <h2>최근 실행</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>시작</th>
+          <th>상태</th>
+          <th>트리거</th>
+          <th>저장 수</th>
+          <th>메시지</th>
+        </tr>
+      </thead>
+      <tbody id="recent-runs-body">
+        {% for run in summary.recent_runs %}
+        <tr>
+          <td>{{ run.id }}</td>
+          <td>{{ run.started_at }}</td>
+          <td><span class="pill {{ run.status }}">{{ run.status }}</span></td>
+          <td>{{ run.triggered_by }}</td>
+          <td>{{ run.saved_count }}</td>
+          <td>{{ run.message }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="muted center">실행 기록이 없습니다.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

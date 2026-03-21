@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }} | Job Posting Server</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">JP</div>
+        <div>
+          <div class="brand-title">Job Posting Server</div>
+          <div class="brand-subtitle">Python collector control room</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-link{% if request.url.path == '/' %} active{% endif %}" href="/">대시보드</a>
+        <a class="nav-link{% if request.url.path.startswith('/settings') %} active{% endif %}" href="/settings">설정</a>
+        <a class="nav-link{% if request.url.path.startswith('/jobs') %} active{% endif %}" href="/jobs">채용공고</a>
+      </nav>
+    </aside>
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script src="{{ url_for('static', path='/app.js') }}"></script>
+</body>
+</html>

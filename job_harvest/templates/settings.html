@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+  <div>
+    <p class="eyebrow">관리자 설정</p>
+    <h1>검색 조건과 수집 스케줄을 웹에서 저장합니다.</h1>
+    <p class="hero-copy">저장하면 즉시 DB에 반영되고, 스케줄도 다시 구성됩니다.</p>
+  </div>
+</section>
+
+<form id="settings-form" class="settings-layout" data-settings='{{ settings_json | safe }}'>
+  <section class="panel">
+    <div class="panel-header"><h2>대상 사이트</h2></div>
+    <div class="checkbox-grid">
+      {% for site in available_sites %}
+      <label class="checkbox-card">
+        <input type="checkbox" name="site_keys" value="{{ site.key }}">
+        <span>{{ site.name }}</span>
+        {% if site.experimental %}<small>experimental</small>{% endif %}
+      </label>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel two-column">
+    <div>
+      <div class="panel-header"><h2>검색 조건</h2></div>
+      <div class="field-grid">
+        <label>직무
+          <textarea id="roles" rows="4" placeholder="백엔드 개발자&#10;데이터 엔지니어"></textarea>
+        </label>
+        <label>기술 키워드
+          <textarea id="keywords" rows="4" placeholder="Python&#10;FastAPI"></textarea>
+        </label>
+        <label>지역
+          <textarea id="locations" rows="4" placeholder="서울&#10;판교"></textarea>
+        </label>
+        <label>회사
+          <textarea id="companies" rows="4" placeholder="원하는 회사명"></textarea>
+        </label>
+        <label>경력
+          <textarea id="experience_levels" rows="4" placeholder="신입&#10;3년"></textarea>
+        </label>
+        <label>학력
+          <textarea id="education_levels" rows="4" placeholder="학사&#10;무관"></textarea>
+        </label>
+        <label>고용형태
+          <textarea id="employment_types" rows="4" placeholder="정규직&#10;계약직"></textarea>
+        </label>
+        <label>포함 필수 키워드
+          <textarea id="required_terms" rows="4" placeholder="반드시 본문에 있어야 하는 단어"></textarea>
+        </label>
+        <label>제외 키워드
+          <textarea id="exclude_keywords" rows="4" placeholder="인턴&#10;계약직"></textarea>
+        </label>
+        <label>추가 검색어
+          <textarea id="extra_terms" rows="4" placeholder="채용&#10;공고"></textarea>
+        </label>
+        <label>직접 검색어
+          <textarea id="queries" rows="4" placeholder="비워두면 위 조건으로 자동 생성"></textarea>
+        </label>
+        <label>엄격 일치 그룹
+          <textarea id="strict_match_groups" rows="4" placeholder="{% for group in strict_groups %}{{ group }}{% if not loop.last %}&#10;{% endif %}{% endfor %}"></textarea>
+        </label>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-header"><h2>수집 동작</h2></div>
+      <div class="field-grid slim">
+        <label>사이트당 최대 결과
+          <input id="max_results_per_site" type="number" min="1">
+        </label>
+        <label>요청 타임아웃(초)
+          <input id="request_timeout_seconds" type="number" min="1">
+        </label>
+        <label>동시 상세 수집 수
+          <input id="concurrency" type="number" min="1">
+        </label>
+        <label>검색 사이 대기(초)
+          <input id="pause_between_searches_seconds" type="number" step="0.1" min="0">
+        </label>
+        <label>출력 디렉터리
+          <input id="output_dir" type="text">
+        </label>
+        <label>사용자 에이전트
+          <textarea id="user_agent" rows="4"></textarea>
+        </label>
+        <label class="toggle"><input id="fetch_details" type="checkbox">상세 페이지 파싱</label>
+        <label class="toggle"><input id="store_html" type="checkbox">HTML 스냅샷 저장</label>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel two-column">
+    <div>
+      <div class="panel-header"><h2>스케줄</h2></div>
+      <div class="field-grid slim">
+        <label class="toggle"><input id="schedule_enabled" type="checkbox">자동 수집 활성화</label>
+        <label>시간대
+          <input id="schedule_timezone" type="text" placeholder="Asia/Seoul">
+        </label>
+        <label>실행 방식
+          <select id="schedule_mode">
+            <option value="fixed_times">하루 중 특정 시각</option>
+            <option value="interval_hours">몇 시간마다</option>
+          </select>
+        </label>
+        <label>실행 시각 목록
+          <textarea id="schedule_times" rows="4" placeholder="09:00&#10;18:00"></textarea>
+        </label>
+        <label>반복 간격(시간)
+          <input id="schedule_interval_hours" type="number" min="1">
+        </label>
+        <label class="toggle"><input id="schedule_run_on_start" type="checkbox">서버 시작 시 1회 즉시 실행</label>
+      </div>
+    </div>
+
+    <div class="panel note-panel">
+      <div class="panel-header"><h2>설정 메모</h2></div>
+      <ul class="note-list">
+        <li>`직접 검색어`를 쓰면 자동 생성 조건보다 우선합니다.</li>
+        <li>`엄격 일치 그룹`에는 `roles`, `keywords`, `locations`, `companies`, `experience_levels`, `education_levels`, `employment_types`만 넣습니다.</li>
+        <li>`실행 시각 목록`은 한 줄에 하나씩 `HH:MM` 형식으로 넣습니다.</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="toolbar">
+    <button type="submit" class="button primary">설정 저장</button>
+    <span id="settings-status" class="muted"></span>
+  </div>
+</form>
+{% endblock %}

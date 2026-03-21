@@ -1,0 +1,53 @@
+output_dir: "./data/exports"
+
+search:
+  sites:
+    - saramin
+    - jobkorea
+    - linkedin
+    # Experimental fallback candidates
+    # - wanted
+    # - jumpit
+    # - remember
+    # - blind
+    # - jobplanet
+    # - rocketpunch
+  queries: []
+  max_results_per_site: 8
+  request_timeout_seconds: 20
+  fetch_details: true
+  store_html: false
+  concurrency: 4
+  pause_between_searches_seconds: 1.0
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+
+criteria:
+  roles:
+    - "백엔드 개발자"
+  keywords:
+    - "Python"
+  exclude_keywords:
+    - "인턴"
+    - "계약직"
+  locations:
+    - "서울"
+  companies: []
+  experience_levels: []
+  education_levels: []
+  employment_types: []
+  required_terms: []
+  extra_terms:
+    - "채용"
+    - "공고"
+  strict_match_groups: []
+
+schedule:
+  enabled: false
+  timezone: "Asia/Seoul"
+  mode: "fixed_times"
+  times:
+    - "09:00"
+    - "18:00"
+  interval_hours: 4
+  run_on_start: true
+  max_runs: null

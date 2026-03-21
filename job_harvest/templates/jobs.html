@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+  <div>
+    <p class="eyebrow">저장된 채용공고</p>
+    <h1>수집 결과를 필터링해서 조회합니다.</h1>
+    <p class="hero-copy">총 {{ total }}건이 저장되어 있습니다.</p>
+  </div>
+</section>
+
+<section class="panel">
+  <form class="filter-bar" method="get" action="/jobs">
+    <input type="text" name="q" value="{{ filters.q }}" placeholder="제목, 회사, 지역, 요약 검색">
+    <select name="site">
+      <option value="">전체 사이트</option>
+      {% for site_item in available_sites %}
+      <option value="{{ site_item.key }}" {% if filters.site == site_item.key %}selected{% endif %}>{{ site_item.name }}</option>
+      {% endfor %}
+    </select>
+    <input type="text" name="company" value="{{ filters.company }}" placeholder="회사명">
+    <input type="text" name="location" value="{{ filters.location }}" placeholder="지역">
+    <button class="button primary" type="submit">필터 적용</button>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>사이트</th>
+          <th>공고</th>
+          <th>회사</th>
+          <th>지역</th>
+          <th>경력</th>
+          <th>학력</th>
+          <th>최근 발견</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in jobs %}
+        <tr>
+          <td>{{ job.site_name }}</td>
+          <td>
+            <a class="job-link" href="{{ job.url }}" target="_blank" rel="noreferrer">{{ job.title or job.search_title }}</a>
+            <div class="subtle">{{ job.employment_type }}</div>
+          </td>
+          <td>{{ job.company or '-' }}</td>
+          <td>{{ job.location or '-' }}</td>
+          <td>{{ job.experience_level or '-' }}</td>
+          <td>{{ job.education_level or '-' }}</td>
+          <td>{{ job.last_seen_at }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="muted center">조건에 맞는 저장 공고가 없습니다.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="pagination">
+  {% if page > 1 %}
+  <a class="button ghost" href="/jobs?q={{ filters.q }}&site={{ filters.site }}&company={{ filters.company }}&location={{ filters.location }}&page={{ page - 1 }}&page_size={{ page_size }}">이전</a>
+  {% endif %}
+  <span>{{ page }} / {{ total_pages }}</span>
+  {% if page < total_pages %}
+  <a class="button ghost" href="/jobs?q={{ filters.q }}&site={{ filters.site }}&company={{ filters.company }}&location={{ filters.location }}&page={{ page + 1 }}&page_size={{ page_size }}">다음</a>
+  {% endif %}
+</section>
+{% endblock %}
