@@ -43,6 +43,14 @@ python -m job_harvest serve --host 127.0.0.1 --port 8000
 
 브라우저에서 `http://127.0.0.1:8000`을 연다.
 
+## 환경 변수
+
+- `JOB_HARVEST_DATABASE_URL`
+  - 지정하지 않으면 기본값으로 `SQLite`를 사용한다.
+  - 예: Postgres 또는 Supabase 연결 문자열
+- `JOB_HARVEST_DATA_DIR`
+  - SQLite 파일과 export 기본 경로를 바꾸고 싶을 때 사용한다.
+
 ## 설정 방식
 
 서버 시작 후 설정은 DB에 저장된다. 첫 실행 시 `config.yaml`이 있으면 그 값을 초기값으로 읽는다. 이후에는 웹 UI에서 저장한 값이 기준이다.
