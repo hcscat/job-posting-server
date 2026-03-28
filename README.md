@@ -26,7 +26,8 @@ The server can:
 Move to the workspace and create the virtual environment once:
 
 ```bash
-cd /d/HCS/work/automation
+git clone <repository-url>
+cd job-posting-server
 python -m venv .venv
 ./.venv/Scripts/python.exe -m pip install -r requirements.txt
 ```
@@ -34,7 +35,7 @@ python -m venv .venv
 After that, run the menu script:
 
 ```bash
-cd /d/HCS/work/automation
+cd job-posting-server
 ./job_harvest.sh
 ```
 
@@ -70,7 +71,7 @@ If you want AI enrichment with OpenAI:
 If you want to bypass the menu:
 
 ```bash
-cd /d/HCS/work/automation
+cd job-posting-server
 ./.venv/Scripts/python.exe -m job_harvest serve --host 127.0.0.1 --port 8000
 ```
 

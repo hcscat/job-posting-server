@@ -27,7 +27,8 @@ FastAPI 기반 채용 공고 수집 서버 및 웹 대시보드입니다.
 작업 폴더로 이동한 뒤, 한 번만 가상환경을 만들면 됩니다.
 
 ```bash
-cd /d/HCS/work/automation
+git clone <repository-url>
+cd job-posting-server
 python -m venv .venv
 ./.venv/Scripts/python.exe -m pip install -r requirements.txt
 ```
@@ -35,7 +36,7 @@ python -m venv .venv
 그 다음부터는 메뉴 스크립트를 실행하면 됩니다.
 
 ```bash
-cd /d/HCS/work/automation
+cd job-posting-server
 ./job_harvest.sh
 ```
 
@@ -71,7 +72,7 @@ OpenAI 기반 정리를 쓰려면:
 메뉴를 거치지 않고 직접 실행하고 싶다면:
 
 ```bash
-cd /d/HCS/work/automation
+cd job-posting-server
 ./.venv/Scripts/python.exe -m job_harvest serve --host 127.0.0.1 --port 8000
 ```
 
