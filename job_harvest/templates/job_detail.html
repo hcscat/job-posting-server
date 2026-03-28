@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+  <div>
+    <p class="eyebrow">{{ tr('job_detail.eyebrow') }}</p>
+    <h1>{{ job.title or job.search_title }}</h1>
+    <p class="hero-copy">{{ job.site_name }} | {{ job.company or tr('common.not_available') }} | {{ job.location or tr('common.not_available') }}</p>
+  </div>
+</section>
+
+<section class="panel-grid">
+  <article class="panel">
+    <div class="panel-header"><h2>{{ tr('job_detail.normalized') }}</h2></div>
+    <div class="site-list">
+      <div class="site-row"><span>{{ tr('common.external') }}</span><strong><a href="{{ job.url }}" target="_blank" rel="noreferrer">{{ tr('common.open') }}</a></strong></div>
+      <div class="site-row"><span>{{ tr('common.employment') }}</span><strong>{{ job.employment_type or tr('common.not_available') }}</strong></div>
+      <div class="site-row"><span>{{ tr('common.experience') }}</span><strong>{{ job.experience_level or tr('common.not_available') }}</strong></div>
+      <div class="site-row"><span>{{ tr('common.education') }}</span><strong>{{ job.education_level or tr('common.not_available') }}</strong></div>
+      <div class="site-row"><span>{{ tr('common.job_family') }}</span><strong>{{ job.ai_job_family and tr('job_family.' ~ job.ai_job_family) or tr('common.not_available') }}</strong></div>
+      <div class="site-row"><span>{{ tr('jobs.tech_stack') }}</span><strong>{{ job.ai_tech_stack | join(', ') if job.ai_tech_stack else tr('common.not_available') }}</strong></div>
+    </div>
+  </article>
+
+  <article class="panel">
+    <div class="panel-header"><h2>{{ tr('job_detail.snapshots') }}</h2></div>
+    <div class="site-list">
+      <div class="site-row">
+        <span>{{ tr('jobs.listing_raw') }}</span>
+        <strong>
+          {% if job.listing_snapshot_sha256 %}
+          <a href="/raw/listing/{{ job.listing_snapshot_sha256 }}">{{ tr('common.view') }}</a>
+          {% else %}{{ tr('common.not_available') }}{% endif %}
+        </strong>
+      </div>
+      <div class="site-row">
+        <span>{{ tr('jobs.detail_raw') }}</span>
+        <strong>
+          {% if job.detail_snapshot_sha256 %}
+          <a href="/raw/detail/{{ job.detail_snapshot_sha256 }}">{{ tr('common.view') }}</a>
+          {% else %}{{ tr('common.not_available') }}{% endif %}
+        </strong>
+      </div>
+      <div class="site-row"><span>{{ tr('jobs.table.last_seen') }}</span><strong>{{ job.last_seen_at }}</strong></div>
+      <div class="site-row"><span>{{ tr('common.seen_count') }}</span><strong>{{ job.seen_count }}</strong></div>
+    </div>
+  </article>
+</section>
+
+<section class="panel">
+  <div class="panel-header"><h2>{{ tr('job_detail.ai_summary') }}</h2></div>
+  <p>{{ job.ai_summary or job.summary or tr('jobs.summary_empty') }}</p>
+</section>
+
+<section class="panel">
+  <div class="panel-header"><h2>{{ tr('job_detail.description') }}</h2></div>
+  <pre>{{ job.description or tr('common.not_available') }}</pre>
+</section>
+
+<section class="panel">
+  <div class="panel-header"><h2>{{ tr('job_detail.raw_payload') }}</h2></div>
+  <pre>{{ raw_payload_json }}</pre>
+</section>
+{% endblock %}

@@ -10,7 +10,12 @@ import requests
 from job_harvest.ai_enrichment import HeuristicEnricher, apply_enrichment, build_enricher
 from job_harvest.config import AppConfig
 from job_harvest.crawler import discover_job_hits
-from job_harvest.extract import DetailFetchResult, fetch_job_details
+from job_harvest.extract import (
+    DetailFetchResult,
+    collect_jobplanet_details_with_browser,
+    collect_rendered_details_with_browser,
+    fetch_job_details,
+)
 from job_harvest.models import JobPosting, SearchHit
 from job_harvest.raw_store import RawSnapshotStore
 from job_harvest.storage import persist_run
@@ -23,6 +28,8 @@ class CollectionExecution:
     deduped_hits: list[SearchHit]
     skipped_existing_hits: list[SearchHit]
     detail_results: list[DetailFetchResult]
+    all_postings: list[JobPosting]
+    raw_manifest: list[dict[str, object]]
     relevant_postings: list[JobPosting]
     html_by_url: dict[str, str]
     listing_pages_fetched: int
@@ -38,6 +45,8 @@ def run_collection(config: AppConfig) -> tuple[list[JobPosting], str]:
     run_dir = persist_run(
         output_dir=config.output_dir,
         postings=execution.relevant_postings,
+        all_postings=execution.all_postings,
+        raw_manifest=execution.raw_manifest,
         queries=execution.queries,
         config_source=config.config_source,
         store_html=config.search.store_html,
@@ -81,6 +90,23 @@ def collect_postings(
         for result in detail_results
         if is_relevant_posting(result.posting, config)
     ]
+    all_postings = [result.posting for result in detail_results]
+    raw_manifest = [
+        {
+            "site_key": result.posting.site_key,
+            "site_name": result.posting.site_name,
+            "normalized_url": result.posting.normalized_url,
+            "url": result.posting.url,
+            "title": result.posting.title or result.posting.search_title,
+            "status_code": result.posting.status_code,
+            "is_it_job": result.posting.is_it_job,
+            "listing_snapshot_sha256": result.posting.listing_snapshot_sha256,
+            "detail_snapshot_sha256": result.posting.detail_snapshot_sha256,
+            "detail_fetched_at": result.posting.detail_fetched_at,
+            "enriched_at": result.posting.enriched_at,
+        }
+        for result in detail_results
+    ]
     html_by_url = {
         result.posting.normalized_url: result.html
         for result in detail_results
@@ -97,6 +123,8 @@ def collect_postings(
         deduped_hits=discovery.deduped_hits,
         skipped_existing_hits=skipped_existing_hits,
         detail_results=detail_results,
+        all_postings=all_postings,
+        raw_manifest=raw_manifest,
         relevant_postings=relevant_postings,
         html_by_url=html_by_url,
         listing_pages_fetched=discovery.listing_pages_fetched,
@@ -140,18 +168,48 @@ def collect_details(
             for hit in hits
         ]
 
+    headers = dict(session.headers)
     results: list[DetailFetchResult] = []
+    jobplanet_hits: list[SearchHit] = []
+    blind_hits: list[SearchHit] = []
+    regular_hits: list[SearchHit] = []
+
+    for hit in hits:
+        if hit.site_key == "jobplanet":
+            jobplanet_hits.append(hit)
+        elif hit.site_key == "blind":
+            blind_hits.append(hit)
+        else:
+            regular_hits.append(hit)
+
+    results.extend(
+        collect_jobplanet_details_with_browser(
+            search_config=config.search,
+            hits=jobplanet_hits,
+            raw_store=raw_store,
+        )
+    )
+    results.extend(
+        collect_rendered_details_with_browser(
+            search_config=config.search,
+            hits=blind_hits,
+            raw_store=raw_store,
+        )
+    )
+
+    if not regular_hits:
+        return results
+
     with ThreadPoolExecutor(max_workers=config.search.concurrency) as executor:
         futures = [
             executor.submit(
                 fetch_job_details,
-                dict(session.headers),
+                config.search,
+                headers,
                 hit,
-                config.search.request_timeout_seconds,
-                config.search.store_html,
                 raw_store,
             )
-            for hit in hits
+            for hit in regular_hits
         ]
         for future in as_completed(futures):
             results.append(future.result())

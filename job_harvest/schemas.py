@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from typing import Any
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -58,6 +59,9 @@ class SettingsPayload(BaseModel):
     ai_provider: Literal["heuristic", "openai"] = "heuristic"
     ai_model: str = ""
     user_agent: str = DEFAULT_USER_AGENT
+    browser_enabled: bool = True
+    browser_headless: bool = True
+    browser_timeout_seconds: int = 60
     output_dir: str = "./data/exports"
 
     schedule_enabled: bool = False
@@ -118,6 +122,7 @@ class SettingsPayload(BaseModel):
         "request_timeout_seconds",
         "detail_refetch_hours",
         "concurrency",
+        "browser_timeout_seconds",
         "schedule_interval_hours",
     )
     @classmethod
@@ -206,6 +211,62 @@ class JobListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class JobDetailRead(JobPostingRead):
+    raw_payload: dict[str, Any] | None = None
+
+
+class RunPostingRead(BaseModel):
+    site_key: str = ""
+    site_name: str = ""
+    normalized_url: str = ""
+    url: str = ""
+    title: str = ""
+    company: str = ""
+    location: str = ""
+    status_code: int = 0
+    is_it_job: bool = False
+    listing_snapshot_sha256: str = ""
+    detail_snapshot_sha256: str = ""
+
+
+class RawManifestRead(BaseModel):
+    site_key: str = ""
+    site_name: str = ""
+    normalized_url: str = ""
+    url: str = ""
+    title: str = ""
+    status_code: int = 0
+    is_it_job: bool = False
+    listing_snapshot_sha256: str = ""
+    detail_snapshot_sha256: str = ""
+    detail_fetched_at: str = ""
+    enriched_at: str = ""
+
+
+class RunDetailRead(BaseModel):
+    run: CollectionRunRead
+    postings: list[RunPostingRead]
+    raw_manifest: list[RawManifestRead]
+
+
+class RawSnapshotRead(BaseModel):
+    category: str
+    sha256_hex: str
+    text: str
+
+
+class RequestInterpretPayload(BaseModel):
+    text: str = Field(min_length=1)
+    base_payload: SettingsPayload | None = None
+
+
+class RequestInterpretRead(BaseModel):
+    provider: str
+    model: str
+    notes: list[str]
+    payload: SettingsPayload
 
 
 class SiteCountRead(BaseModel):

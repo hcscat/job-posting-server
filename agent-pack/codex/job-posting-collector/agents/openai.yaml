@@ -1,0 +1,3 @@
+display_name: Job Posting Collector
+short_description: Collect and normalize IT job postings across Korean job sites with honest site-by-site coverage notes.
+default_prompt: Collect IT and software-engineering job postings across the configured job sites, store raw and normalized data together, keep URL-centered deduplication, and clearly note best-effort coverage for blocked sites.

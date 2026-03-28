@@ -15,6 +15,17 @@ DEFAULT_SITES: dict[str, SiteDefinition] = {
     "blind": SiteDefinition("blind", "블라인드", "teamblind.com"),
 }
 
+STABLE_SITE_KEYS = {
+    "saramin",
+    "jobkorea",
+    "linkedin",
+    "wanted",
+    "jumpit",
+    "remember",
+}
+
+BEST_EFFORT_SITE_KEYS = set(DEFAULT_SITES) - STABLE_SITE_KEYS
+
 
 def resolve_sites(site_keys: list[str]) -> list[SiteDefinition]:
     sites: list[SiteDefinition] = []

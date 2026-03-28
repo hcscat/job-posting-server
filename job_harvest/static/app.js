@@ -1,8 +1,33 @@
+const APP_MESSAGES = (() => {
+  try {
+    return JSON.parse(document.body?.dataset.messages || "{}");
+  } catch (_error) {
+    return {};
+  }
+})();
+
+function t(key, replacements = {}) {
+  const template = APP_MESSAGES[key] || key;
+  return Object.entries(replacements).reduce(
+    (result, [name, value]) => result.replaceAll(`{${name}}`, String(value)),
+    template
+  );
+}
+
 function splitLines(value) {
   return value
     .split(/[\r\n,]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function setFieldValue(id, value) {
@@ -19,144 +44,287 @@ function setFieldValue(id, value) {
   element.value = value ?? "";
 }
 
-async function refreshDashboardRuns() {
-  const tbody = document.getElementById("recent-runs-body");
-  if (!tbody) return;
-  const response = await fetch("/api/runs?limit=8");
-  const runs = await response.json();
-  tbody.innerHTML = runs
+function setSiteSelections(siteKeys) {
+  const selected = new Set(siteKeys || []);
+  document.querySelectorAll('input[name="site_keys"]').forEach((input) => {
+    input.checked = selected.has(input.value);
+  });
+}
+
+const SETTINGS_FIELD_IDS = [
+  "queries",
+  "crawl_strategy",
+  "crawl_terms",
+  "listing_page_limit",
+  "roles",
+  "keywords",
+  "exclude_keywords",
+  "locations",
+  "companies",
+  "experience_levels",
+  "education_levels",
+  "employment_types",
+  "required_terms",
+  "extra_terms",
+  "strict_match_groups",
+  "user_agent",
+  "output_dir",
+  "max_results_per_site",
+  "request_timeout_seconds",
+  "detail_refetch_hours",
+  "concurrency",
+  "pause_between_searches_seconds",
+  "ai_enrichment_enabled",
+  "ai_provider",
+  "ai_model",
+  "fetch_details",
+  "store_html",
+  "browser_enabled",
+  "browser_headless",
+  "browser_timeout_seconds",
+];
+
+function applySettingsPayload(settings) {
+  if (!settings) return;
+  setSiteSelections(settings.site_keys || []);
+  SETTINGS_FIELD_IDS.forEach((id) => setFieldValue(id, settings[id]));
+}
+
+function collectSettingsPayload() {
+  return {
+    site_keys: Array.from(document.querySelectorAll('input[name="site_keys"]:checked')).map((item) => item.value),
+    queries: splitLines(document.getElementById("queries").value),
+    crawl_strategy: document.getElementById("crawl_strategy").value,
+    crawl_terms: splitLines(document.getElementById("crawl_terms").value),
+    listing_page_limit: Number(document.getElementById("listing_page_limit").value || 0),
+    roles: splitLines(document.getElementById("roles").value),
+    keywords: splitLines(document.getElementById("keywords").value),
+    exclude_keywords: splitLines(document.getElementById("exclude_keywords").value),
+    locations: splitLines(document.getElementById("locations").value),
+    companies: splitLines(document.getElementById("companies").value),
+    experience_levels: splitLines(document.getElementById("experience_levels").value),
+    education_levels: splitLines(document.getElementById("education_levels").value),
+    employment_types: splitLines(document.getElementById("employment_types").value),
+    required_terms: splitLines(document.getElementById("required_terms").value),
+    extra_terms: splitLines(document.getElementById("extra_terms").value),
+    strict_match_groups: splitLines(document.getElementById("strict_match_groups").value),
+    max_results_per_site: Number(document.getElementById("max_results_per_site").value || 8),
+    request_timeout_seconds: Number(document.getElementById("request_timeout_seconds").value || 20),
+    fetch_details: document.getElementById("fetch_details").checked,
+    store_html: document.getElementById("store_html").checked,
+    detail_refetch_hours: Number(document.getElementById("detail_refetch_hours").value || 24),
+    concurrency: Number(document.getElementById("concurrency").value || 4),
+    pause_between_searches_seconds: Number(document.getElementById("pause_between_searches_seconds").value || 1),
+    ai_enrichment_enabled: document.getElementById("ai_enrichment_enabled").checked,
+    ai_provider: document.getElementById("ai_provider").value,
+    ai_model: document.getElementById("ai_model").value.trim(),
+    user_agent: document.getElementById("user_agent").value.trim(),
+    browser_enabled: document.getElementById("browser_enabled").checked,
+    browser_headless: document.getElementById("browser_headless").checked,
+    browser_timeout_seconds: Number(document.getElementById("browser_timeout_seconds").value || 60),
+    output_dir: document.getElementById("output_dir").value.trim() || "./data/exports",
+  };
+}
+
+function createListMarkup(values) {
+  const items = Array.isArray(values) ? values.filter(Boolean) : [];
+  if (!items.length) {
+    return `<li>${escapeHtml(t("common.not_available"))}</li>`;
+  }
+  return items.map((value) => `<li>${escapeHtml(value)}</li>`).join("");
+}
+
+function createChipMarkup(values) {
+  const items = Array.isArray(values) ? values.filter(Boolean) : [];
+  if (!items.length) {
+    return `<span class="subtle">${escapeHtml(t("common.not_available"))}</span>`;
+  }
+  return items.map((value) => `<span class="chip">${escapeHtml(value)}</span>`).join("");
+}
+
+function createSnapshotValue(category, sha256Hex) {
+  if (!sha256Hex) {
+    return escapeHtml(t("common.not_available"));
+  }
+  return `<a href="/raw/${category}/${encodeURIComponent(sha256Hex)}">${escapeHtml(t("common.view"))}</a>`;
+}
+
+function translateJobFamily(value) {
+  if (!value) return t("common.not_available");
+  const key = `job_family.${value}`;
+  const translated = t(key);
+  return translated === key ? value : translated;
+}
+
+function createMetadataMarkup(job) {
+  const rows = [
+    ["common.site", job.site_name || t("common.not_available")],
+    ["common.company", job.company || t("common.not_available")],
+    ["common.location", job.location || t("common.not_available")],
+    ["common.employment", job.employment_type || t("common.not_available")],
+    ["common.experience", job.experience_level || t("common.not_available")],
+    ["common.education", job.education_level || t("common.not_available")],
+    ["common.job_family", translateJobFamily(job.ai_job_family)],
+    ["common.seniority", job.ai_seniority || t("common.not_available")],
+    ["common.work_model", job.ai_work_model || t("common.not_available")],
+  ];
+  return rows
     .map(
-      (run) => `
-      <tr>
-        <td>${run.id}</td>
-        <td>${run.started_at}</td>
-        <td><span class="pill ${run.status}">${run.status}</span></td>
-        <td>${run.unique_hit_count} / ${run.relevant_count}</td>
-        <td>${run.duplicate_skip_count}</td>
-        <td>${run.ai_enriched_count}</td>
-        <td>${run.raw_bytes_written}</td>
-        <td>${run.message}</td>
-      </tr>`
+      ([labelKey, value]) =>
+        `<dt>${escapeHtml(t(labelKey))}</dt><dd>${escapeHtml(value)}</dd>`
     )
     .join("");
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function createSnapshotMarkup(job) {
+  const rows = [
+    ["jobs.listing_raw", createSnapshotValue("listing", job.listing_snapshot_sha256)],
+    ["jobs.detail_raw", createSnapshotValue("detail", job.detail_snapshot_sha256)],
+  ];
+  return rows
+    .map(
+      ([labelKey, value]) =>
+        `<dt>${escapeHtml(t(labelKey))}</dt><dd>${value}</dd>`
+    )
+    .join("");
+}
+
+async function openJobDetail(jobId) {
+  const drawer = document.getElementById("job-detail-drawer");
+  if (!drawer) return;
+
+  const title = document.getElementById("job-detail-title");
+  const status = document.getElementById("job-detail-status");
+  const content = document.getElementById("job-detail-content");
+  const external = document.getElementById("job-detail-external");
+
+  drawer.classList.remove("is-hidden");
+  content.classList.add("is-hidden");
+  external.classList.add("is-hidden");
+  title.textContent = t("jobs.drawer_title");
+  status.textContent = t("js.jobs.loading");
+  status.classList.remove("is-hidden");
+  drawer.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  const response = await fetch(`/api/jobs/${jobId}`);
+  if (!response.ok) {
+    status.textContent = t("js.jobs.failed");
+    return;
+  }
+
+  const job = await response.json();
+  title.textContent = job.title || job.search_title || t("jobs.drawer_title");
+  document.getElementById("job-detail-metadata").innerHTML = createMetadataMarkup(job);
+  document.getElementById("job-detail-summary").textContent =
+    job.ai_summary || job.summary || t("jobs.summary_empty");
+  document.getElementById("job-detail-tech-stack").innerHTML = createChipMarkup(job.ai_tech_stack);
+  document.getElementById("job-detail-requirements").innerHTML = createListMarkup(job.ai_requirements);
+  document.getElementById("job-detail-responsibilities").innerHTML = createListMarkup(job.ai_responsibilities);
+  document.getElementById("job-detail-benefits").innerHTML = createListMarkup(job.ai_benefits);
+  document.getElementById("job-detail-snapshots").innerHTML = createSnapshotMarkup(job);
+  document.getElementById("job-detail-description").textContent = job.description || t("common.not_available");
+  document.getElementById("job-detail-raw-payload").textContent = JSON.stringify(job.raw_payload || {}, null, 2);
+
+  if (job.url) {
+    external.href = job.url;
+    external.classList.remove("is-hidden");
+  }
+
+  status.classList.add("is-hidden");
+  content.classList.remove("is-hidden");
+}
+
+function bindSettingsPage() {
   const settingsForm = document.getElementById("settings-form");
-  if (settingsForm) {
-    const settings = JSON.parse(settingsForm.dataset.settings);
+  if (!settingsForm) return;
 
-    document
-      .querySelectorAll('input[name="site_keys"]')
-      .forEach((input) => (input.checked = settings.site_keys.includes(input.value)));
+  const settings = JSON.parse(settingsForm.dataset.settings);
+  applySettingsPayload(settings);
 
-    [
-      "queries",
-      "crawl_strategy",
-      "crawl_terms",
-      "listing_page_limit",
-      "roles",
-      "keywords",
-      "exclude_keywords",
-      "locations",
-      "companies",
-      "experience_levels",
-      "education_levels",
-      "employment_types",
-      "required_terms",
-      "extra_terms",
-      "strict_match_groups",
-      "user_agent",
-      "output_dir",
-      "max_results_per_site",
-      "request_timeout_seconds",
-      "detail_refetch_hours",
-      "concurrency",
-      "pause_between_searches_seconds",
-      "ai_enrichment_enabled",
-      "ai_provider",
-      "ai_model",
-      "schedule_enabled",
-      "schedule_mode",
-      "schedule_times",
-      "schedule_interval_hours",
-      "schedule_run_on_start",
-      "schedule_timezone",
-      "fetch_details",
-      "store_html",
-    ].forEach((id) => setFieldValue(id, settings[id]));
-
-    settingsForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const status = document.getElementById("settings-status");
-      const payload = {
-        site_keys: Array.from(document.querySelectorAll('input[name="site_keys"]:checked')).map((item) => item.value),
-        queries: splitLines(document.getElementById("queries").value),
-        crawl_strategy: document.getElementById("crawl_strategy").value,
-        crawl_terms: splitLines(document.getElementById("crawl_terms").value),
-        listing_page_limit: Number(document.getElementById("listing_page_limit").value || 0),
-        roles: splitLines(document.getElementById("roles").value),
-        keywords: splitLines(document.getElementById("keywords").value),
-        exclude_keywords: splitLines(document.getElementById("exclude_keywords").value),
-        locations: splitLines(document.getElementById("locations").value),
-        companies: splitLines(document.getElementById("companies").value),
-        experience_levels: splitLines(document.getElementById("experience_levels").value),
-        education_levels: splitLines(document.getElementById("education_levels").value),
-        employment_types: splitLines(document.getElementById("employment_types").value),
-        required_terms: splitLines(document.getElementById("required_terms").value),
-        extra_terms: splitLines(document.getElementById("extra_terms").value),
-        strict_match_groups: splitLines(document.getElementById("strict_match_groups").value),
-        max_results_per_site: Number(document.getElementById("max_results_per_site").value || 8),
-        request_timeout_seconds: Number(document.getElementById("request_timeout_seconds").value || 20),
-        fetch_details: document.getElementById("fetch_details").checked,
-        store_html: document.getElementById("store_html").checked,
-        detail_refetch_hours: Number(document.getElementById("detail_refetch_hours").value || 24),
-        concurrency: Number(document.getElementById("concurrency").value || 4),
-        pause_between_searches_seconds: Number(document.getElementById("pause_between_searches_seconds").value || 1),
-        ai_enrichment_enabled: document.getElementById("ai_enrichment_enabled").checked,
-        ai_provider: document.getElementById("ai_provider").value,
-        ai_model: document.getElementById("ai_model").value.trim(),
-        user_agent: document.getElementById("user_agent").value.trim(),
-        output_dir: document.getElementById("output_dir").value.trim() || "./data/exports",
-        schedule_enabled: document.getElementById("schedule_enabled").checked,
-        schedule_mode: document.getElementById("schedule_mode").value,
-        schedule_times: splitLines(document.getElementById("schedule_times").value),
-        schedule_interval_hours: Number(document.getElementById("schedule_interval_hours").value || 4),
-        schedule_run_on_start: document.getElementById("schedule_run_on_start").checked,
-        schedule_timezone: document.getElementById("schedule_timezone").value.trim() || "Asia/Seoul",
-      };
-
-      status.textContent = "저장 중...";
-      const response = await fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        status.textContent = error.detail || "저장 실패";
+  const interpretButton = document.getElementById("interpret-request-button");
+  if (interpretButton) {
+    interpretButton.addEventListener("click", async () => {
+      const requestField = document.getElementById("interpret_request");
+      const status = document.getElementById("interpret-status");
+      const notes = document.getElementById("interpret-notes");
+      const text = requestField.value.trim();
+      if (!text) {
+        status.textContent = t("js.settings.enter_request");
         return;
       }
 
-      status.textContent = "저장 완료";
+      interpretButton.disabled = true;
+      status.textContent = t("js.settings.interpreting");
+      notes.textContent = "";
+
+      const response = await fetch("/api/settings/interpret", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          base_payload: collectSettingsPayload(),
+        }),
+      });
+
+      interpretButton.disabled = false;
+      if (!response.ok) {
+        const error = await response.json();
+        status.textContent = error.detail || t("js.settings.interpret_failed");
+        return;
+      }
+
+      const result = await response.json();
+      applySettingsPayload(result.payload);
+      status.textContent = t("js.settings.interpret_applied", {
+        provider: result.provider,
+        model: result.model,
+      });
+      notes.textContent = (result.notes || []).join(" ");
     });
   }
 
-  const runButton = document.getElementById("run-now-button");
-  if (runButton) {
-    runButton.addEventListener("click", async () => {
-      runButton.disabled = true;
-      runButton.textContent = "수집 중...";
-      const response = await fetch("/api/collect", { method: "POST" });
-      if (!response.ok) {
-        const error = await response.json();
-        alert(error.detail || "수집 실행 실패");
-      } else {
-        await refreshDashboardRuns();
-      }
-      runButton.disabled = false;
-      runButton.textContent = "지금 수집";
+  settingsForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const status = document.getElementById("settings-status");
+    const payload = collectSettingsPayload();
+
+    status.textContent = t("js.settings.saving");
+    const response = await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      status.textContent = error.detail || t("js.settings.save_failed");
+      return;
+    }
+
+    settingsForm.dataset.settings = JSON.stringify(payload);
+    status.textContent = t("js.settings.saved");
+  });
+}
+
+function bindJobsPage() {
+  const drawer = document.getElementById("job-detail-drawer");
+  if (!drawer) return;
+
+  document.querySelectorAll(".detail-trigger").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await openJobDetail(button.dataset.jobId);
+    });
+  });
+
+  const closeButton = document.getElementById("job-detail-close");
+  if (closeButton) {
+    closeButton.addEventListener("click", () => {
+      drawer.classList.add("is-hidden");
     });
   }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  bindSettingsPage();
+  bindJobsPage();
 });

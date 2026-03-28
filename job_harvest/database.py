@@ -68,6 +68,9 @@ def migrate_sqlite_schema(engine: Engine) -> None:
             "ai_enrichment_enabled": "BOOLEAN NOT NULL DEFAULT 0",
             "ai_provider": "TEXT NOT NULL DEFAULT 'heuristic'",
             "ai_model": "TEXT NOT NULL DEFAULT ''",
+            "browser_enabled": "BOOLEAN NOT NULL DEFAULT 1",
+            "browser_headless": "BOOLEAN NOT NULL DEFAULT 1",
+            "browser_timeout_seconds": "INTEGER NOT NULL DEFAULT 60",
         },
         "collection_runs": {
             "relevant_count": "INTEGER NOT NULL DEFAULT 0",

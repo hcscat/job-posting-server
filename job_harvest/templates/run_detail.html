@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+  <div>
+    <p class="eyebrow">{{ tr('run_detail.eyebrow') }}</p>
+    <h1>{{ tr('run_detail.hero_title', run_id=run.id) }}</h1>
+    <p class="hero-copy">{{ tr('run_detail.hero_copy', status=run.status, started_at=run.started_at, message=run.message) }}</p>
+  </div>
+</section>
+
+<section class="card-grid">
+  <article class="card stat"><span class="label">{{ tr('run_detail.metric_unique') }}</span><strong>{{ run.unique_hit_count }}</strong></article>
+  <article class="card stat"><span class="label">{{ tr('run_detail.metric_relevant') }}</span><strong>{{ run.relevant_count }}</strong></article>
+  <article class="card stat"><span class="label">{{ tr('run_detail.metric_fetched') }}</span><strong>{{ run.detail_page_count }}</strong></article>
+  <article class="card stat"><span class="label">{{ tr('run_detail.metric_raw_bytes') }}</span><strong>{{ run.raw_bytes_written }}</strong></article>
+</section>
+
+<section class="panel">
+  <div class="panel-header"><h2>{{ tr('run_detail.all_postings') }}</h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>{{ tr('run_detail.table.site') }}</th>
+          <th>{{ tr('run_detail.table.title') }}</th>
+          <th>{{ tr('run_detail.table.status') }}</th>
+          <th>{{ tr('run_detail.table.it') }}</th>
+          <th>{{ tr('run_detail.table.listing_raw') }}</th>
+          <th>{{ tr('run_detail.table.detail_raw') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for posting in postings %}
+        <tr>
+          <td>{{ posting.site_name or posting.site_key }}</td>
+          <td><a href="{{ posting.url }}" target="_blank" rel="noreferrer">{{ posting.title or posting.normalized_url }}</a></td>
+          <td>{{ posting.status_code or tr('common.not_available') }}</td>
+          <td>{{ posting.is_it_job }}</td>
+          <td>
+            {% if posting.listing_snapshot_sha256 %}
+            <a href="/raw/listing/{{ posting.listing_snapshot_sha256 }}">{{ tr('common.view') }}</a>
+            {% else %}{{ tr('common.not_available') }}{% endif %}
+          </td>
+          <td>
+            {% if posting.detail_snapshot_sha256 %}
+            <a href="/raw/detail/{{ posting.detail_snapshot_sha256 }}">{{ tr('common.view') }}</a>
+            {% else %}{{ tr('common.not_available') }}{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted center">{{ tr('run_detail.no_postings') }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-header"><h2>{{ tr('run_detail.raw_manifest') }}</h2></div>
+  <pre>{{ raw_manifest | tojson(indent=2) }}</pre>
+</section>
+{% endblock %}

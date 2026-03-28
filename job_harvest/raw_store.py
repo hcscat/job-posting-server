@@ -50,3 +50,11 @@ class RawSnapshotStore:
             content_type=content_type,
             newly_written=newly_written,
         )
+
+    def read_text(self, *, category: str, sha256_hex: str) -> str:
+        relative_path = Path(category) / sha256_hex[:2] / f"{sha256_hex}.gz"
+        absolute_path = self._root / relative_path
+        if not absolute_path.exists():
+            raise FileNotFoundError(str(relative_path))
+        with gzip.open(absolute_path, "rt", encoding="utf-8") as handle:
+            return handle.read()

@@ -2,34 +2,34 @@
 {% block content %}
 <section class="hero compact">
   <div>
-    <p class="eyebrow">저장된 채용공고</p>
-    <h1>IT/개발 공고를 검색하고 AI 정리 결과까지 함께 조회합니다.</h1>
-    <p class="hero-copy">총 {{ total }}건이 저장되어 있습니다.</p>
+    <p class="eyebrow">{{ tr('jobs.eyebrow') }}</p>
+    <h1>{{ tr('jobs.hero_title') }}</h1>
+    <p class="hero-copy">{{ tr('jobs.hero_copy', total=total) }}</p>
   </div>
 </section>
 
 <section class="panel">
   <form class="filter-bar" method="get" action="/jobs">
-    <input type="text" name="q" value="{{ filters.q }}" placeholder="제목, 회사, 지역, AI 요약 검색">
+    <input type="text" name="q" value="{{ filters.q }}" placeholder="{{ tr('jobs.search_placeholder') }}">
     <select name="site">
-      <option value="">전체 사이트</option>
+      <option value="">{{ tr('jobs.all_sites') }}</option>
       {% for site_item in available_sites %}
       <option value="{{ site_item.key }}" {% if filters.site == site_item.key %}selected{% endif %}>{{ site_item.name }}</option>
       {% endfor %}
     </select>
     <select name="job_family">
-      <option value="">전체 직군</option>
+      <option value="">{{ tr('jobs.all_job_families') }}</option>
       {% for family in job_families %}
-      <option value="{{ family }}" {% if filters.job_family == family %}selected{% endif %}>{{ family }}</option>
+      <option value="{{ family }}" {% if filters.job_family == family %}selected{% endif %}>{{ tr('job_family.' ~ family) }}</option>
       {% endfor %}
     </select>
-    <input type="text" name="company" value="{{ filters.company }}" placeholder="회사명">
-    <input type="text" name="location" value="{{ filters.location }}" placeholder="지역">
+    <input type="text" name="company" value="{{ filters.company }}" placeholder="{{ tr('jobs.company_placeholder') }}">
+    <input type="text" name="location" value="{{ filters.location }}" placeholder="{{ tr('jobs.location_placeholder') }}">
     <label class="toggle">
       <input type="checkbox" name="it_only" value="true" {% if filters.it_only %}checked{% endif %}>
-      IT 공고만
+      {{ tr('jobs.it_only') }}
     </label>
-    <button class="button primary" type="submit">필터 적용</button>
+    <button class="button primary" type="submit">{{ tr('jobs.apply') }}</button>
   </form>
 </section>
 
@@ -38,13 +38,13 @@
     <table>
       <thead>
         <tr>
-          <th>사이트</th>
-          <th>공고</th>
-          <th>회사</th>
-          <th>지역</th>
-          <th>AI 분류</th>
-          <th>기술스택</th>
-          <th>최근 발견</th>
+          <th>{{ tr('jobs.table.site') }}</th>
+          <th>{{ tr('jobs.table.posting') }}</th>
+          <th>{{ tr('jobs.table.company') }}</th>
+          <th>{{ tr('jobs.table.location') }}</th>
+          <th>{{ tr('jobs.table.ai_classification') }}</th>
+          <th>{{ tr('jobs.table.tech_stack') }}</th>
+          <th>{{ tr('jobs.table.last_seen') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -52,24 +52,25 @@
         <tr>
           <td>{{ job.site_name }}</td>
           <td>
-            <a class="job-link" href="{{ job.url }}" target="_blank" rel="noreferrer">{{ job.title or job.search_title }}</a>
-            <div class="subtle">{{ job.employment_type or '-' }} / {{ job.experience_level or '-' }}</div>
+            <button type="button" class="job-link detail-trigger" data-job-id="{{ job.id }}">{{ job.title or job.search_title }}</button>
+            <div class="subtle"><a href="{{ job.url }}" target="_blank" rel="noreferrer">{{ tr('jobs.external_posting') }}</a></div>
+            <div class="subtle">{{ job.employment_type or tr('common.not_available') }} / {{ job.experience_level or tr('common.not_available') }}</div>
             {% if job.ai_summary %}
             <div class="subtle">{{ job.ai_summary }}</div>
             {% endif %}
           </td>
-          <td>{{ job.company or '-' }}</td>
-          <td>{{ job.location or '-' }}</td>
+          <td>{{ job.company or tr('common.not_available') }}</td>
+          <td>{{ job.location or tr('common.not_available') }}</td>
           <td>
-            <div>{{ job.ai_job_family or '-' }}</div>
-            <div class="subtle">{{ job.ai_seniority or '-' }} / {{ job.ai_work_model or '-' }}</div>
+            <div>{{ job.ai_job_family and tr('job_family.' ~ job.ai_job_family) or tr('common.not_available') }}</div>
+            <div class="subtle">{{ job.ai_seniority or tr('common.not_available') }} / {{ job.ai_work_model or tr('common.not_available') }}</div>
           </td>
-          <td>{{ job.ai_tech_stack | join(', ') if job.ai_tech_stack else '-' }}</td>
+          <td>{{ job.ai_tech_stack | join(', ') if job.ai_tech_stack else tr('common.not_available') }}</td>
           <td>{{ job.last_seen_at }}</td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="7" class="muted center">조건에 맞는 저장 공고가 없습니다.</td>
+          <td colspan="7" class="muted center">{{ tr('jobs.no_results') }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -77,13 +78,67 @@
   </div>
 </section>
 
+<section id="job-detail-drawer" class="panel detail-drawer is-hidden">
+  <div class="panel-header">
+    <h2 id="job-detail-title">{{ tr('jobs.drawer_title') }}</h2>
+    <div class="toolbar">
+      <a id="job-detail-external" class="button ghost is-hidden" target="_blank" rel="noreferrer">{{ tr('jobs.open_external') }}</a>
+      <button type="button" class="button ghost" id="job-detail-close">{{ tr('common.close') }}</button>
+    </div>
+  </div>
+  <p id="job-detail-status" class="muted">{{ tr('jobs.drawer_placeholder') }}</p>
+  <div id="job-detail-content" class="detail-drawer-content is-hidden">
+    <div class="detail-drawer-grid">
+      <section class="detail-block">
+        <h3>{{ tr('jobs.normalized') }}</h3>
+        <dl id="job-detail-metadata" class="detail-kv"></dl>
+      </section>
+      <section class="detail-block">
+        <h3>{{ tr('jobs.ai_summary') }}</h3>
+        <p id="job-detail-summary"></p>
+        <div class="detail-list-section">
+          <h4>{{ tr('jobs.tech_stack') }}</h4>
+          <div id="job-detail-tech-stack" class="chip-list"></div>
+        </div>
+        <div class="detail-list-section">
+          <h4>{{ tr('jobs.requirements') }}</h4>
+          <ul id="job-detail-requirements" class="detail-list"></ul>
+        </div>
+        <div class="detail-list-section">
+          <h4>{{ tr('jobs.responsibilities') }}</h4>
+          <ul id="job-detail-responsibilities" class="detail-list"></ul>
+        </div>
+        <div class="detail-list-section">
+          <h4>{{ tr('jobs.benefits') }}</h4>
+          <ul id="job-detail-benefits" class="detail-list"></ul>
+        </div>
+      </section>
+    </div>
+
+    <section class="detail-block">
+      <h3>{{ tr('common.snapshots') }}</h3>
+      <div id="job-detail-snapshots" class="detail-kv"></div>
+    </section>
+
+    <section class="detail-block">
+      <h3>{{ tr('common.description') }}</h3>
+      <pre id="job-detail-description" class="detail-pre"></pre>
+    </section>
+
+    <section class="detail-block">
+      <h3>{{ tr('common.raw_payload') }}</h3>
+      <pre id="job-detail-raw-payload" class="detail-pre"></pre>
+    </section>
+  </div>
+</section>
+
 <section class="pagination">
   {% if page > 1 %}
-  <a class="button ghost" href="/jobs?q={{ filters.q }}&site={{ filters.site }}&job_family={{ filters.job_family }}&company={{ filters.company }}&location={{ filters.location }}{% if filters.it_only %}&it_only=true{% endif %}&page={{ page - 1 }}&page_size={{ page_size }}">이전</a>
+  <a class="button ghost" href="/jobs?q={{ filters.q }}&site={{ filters.site }}&job_family={{ filters.job_family }}&company={{ filters.company }}&location={{ filters.location }}{% if filters.it_only %}&it_only=true{% endif %}&page={{ page - 1 }}&page_size={{ page_size }}">{{ tr('jobs.previous') }}</a>
   {% endif %}
   <span>{{ page }} / {{ total_pages }}</span>
   {% if page < total_pages %}
-  <a class="button ghost" href="/jobs?q={{ filters.q }}&site={{ filters.site }}&job_family={{ filters.job_family }}&company={{ filters.company }}&location={{ filters.location }}{% if filters.it_only %}&it_only=true{% endif %}&page={{ page + 1 }}&page_size={{ page_size }}">다음</a>
+  <a class="button ghost" href="/jobs?q={{ filters.q }}&site={{ filters.site }}&job_family={{ filters.job_family }}&company={{ filters.company }}&location={{ filters.location }}{% if filters.it_only %}&it_only=true{% endif %}&page={{ page + 1 }}&page_size={{ page_size }}">{{ tr('jobs.next') }}</a>
   {% endif %}
 </section>
 {% endblock %}

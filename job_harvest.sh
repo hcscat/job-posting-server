@@ -47,11 +47,10 @@ print_header() {
 2) Start web server
 3) Start web server with reload
 4) Run one collection from config
-5) Start scheduled collection from config
-6) Show generated queries
-7) Run tests
-8) Change config/host/port
-9) Exit
+5) Show generated queries
+6) Run tests
+7) Change config/host/port
+8) Exit
 EOF
 }
 
@@ -159,25 +158,19 @@ while true; do
     5)
       ensure_python || continue
       run_command \
-        "Start scheduled collection (Ctrl+C to stop)" \
-        run_python -m job_harvest --config "$CONFIG_PATH" schedule
-      ;;
-    6)
-      ensure_python || continue
-      run_command \
         "Show generated queries" \
         run_python -m job_harvest --config "$CONFIG_PATH" show-queries
       ;;
-    7)
+    6)
       ensure_python || continue
       run_command \
         "Run tests" \
         run_python -m unittest discover -s "$ROOT_DIR/tests" -v
       ;;
-    8)
+    7)
       change_settings
       ;;
-    9)
+    8)
       echo "Exiting."
       exit 0
       ;;

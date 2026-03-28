@@ -49,6 +49,9 @@ class SearchConfig:
     ai_provider: str = "heuristic"
     ai_model: str = ""
     user_agent: str = DEFAULT_USER_AGENT
+    browser_enabled: bool = True
+    browser_headless: bool = True
+    browser_timeout_seconds: int = 60
 
 
 @dataclass
@@ -122,6 +125,9 @@ def _build_search_config(raw: dict[str, Any]) -> SearchConfig:
         ai_provider=ai_provider,
         ai_model=str(raw.get("ai_model", "")).strip(),
         user_agent=str(raw.get("user_agent", DEFAULT_USER_AGENT)).strip() or DEFAULT_USER_AGENT,
+        browser_enabled=bool(raw.get("browser_enabled", True)),
+        browser_headless=bool(raw.get("browser_headless", True)),
+        browser_timeout_seconds=max(10, int(raw.get("browser_timeout_seconds", 60))),
     )
 
 
@@ -208,6 +214,9 @@ def config_to_dict(config: AppConfig) -> dict[str, Any]:
             "ai_provider": config.search.ai_provider,
             "ai_model": config.search.ai_model,
             "user_agent": config.search.user_agent,
+            "browser_enabled": config.search.browser_enabled,
+            "browser_headless": config.search.browser_headless,
+            "browser_timeout_seconds": config.search.browser_timeout_seconds,
         },
         "criteria": {
             "roles": list(config.criteria.roles),

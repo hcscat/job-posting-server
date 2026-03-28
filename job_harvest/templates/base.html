@@ -1,25 +1,32 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="{{ locale }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ title }} | Job Posting Server</title>
+  <title>{{ title }} | {{ tr('common.app_title') }}</title>
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
 </head>
-<body>
+<body data-locale="{{ locale }}" data-messages='{{ ui_messages_json | safe }}'>
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">JP</div>
         <div>
-          <div class="brand-title">Job Posting Server</div>
-          <div class="brand-subtitle">Python collector control room</div>
+          <div class="brand-title">{{ tr('common.app_title') }}</div>
+          <div class="brand-subtitle">{{ tr('common.app_subtitle') }}</div>
+        </div>
+      </div>
+      <div class="locale-switch">
+        <span class="subtle">{{ tr('common.language') }}</span>
+        <div class="locale-links">
+          <a class="locale-link{% if locale == 'ko' %} active{% endif %}" href="{{ request.url.include_query_params(lang='ko') }}">{{ tr('common.lang_ko') }}</a>
+          <a class="locale-link{% if locale == 'en' %} active{% endif %}" href="{{ request.url.include_query_params(lang='en') }}">{{ tr('common.lang_en') }}</a>
         </div>
       </div>
       <nav class="nav">
-        <a class="nav-link{% if request.url.path == '/' %} active{% endif %}" href="/">대시보드</a>
-        <a class="nav-link{% if request.url.path.startswith('/settings') %} active{% endif %}" href="/settings">설정</a>
-        <a class="nav-link{% if request.url.path.startswith('/jobs') %} active{% endif %}" href="/jobs">채용공고</a>
+        <a class="nav-link{% if request.url.path == '/' %} active{% endif %}" href="/">{{ tr('common.dashboard') }}</a>
+        <a class="nav-link{% if request.url.path.startswith('/settings') %} active{% endif %}" href="/settings">{{ tr('common.settings') }}</a>
+        <a class="nav-link{% if request.url.path.startswith('/jobs') %} active{% endif %}" href="/jobs">{{ tr('common.jobs') }}</a>
       </nav>
     </aside>
     <main class="content">

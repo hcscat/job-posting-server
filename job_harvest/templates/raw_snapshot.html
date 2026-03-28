@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+  <div>
+    <p class="eyebrow">{{ tr('raw.eyebrow') }}</p>
+    <h1>{{ tr('raw.hero_title', category=category, short_sha=sha256_hex[:12]) }}</h1>
+    <p class="hero-copy">{{ tr('raw.hero_copy') }}</p>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-header"><h2>{{ tr('raw.snapshot_body') }}</h2></div>
+  <pre>{{ text }}</pre>
+</section>
+{% endblock %}

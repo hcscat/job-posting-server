@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,9 +13,11 @@ from job_harvest.config import AppConfig, build_config, config_to_dict, load_con
 from job_harvest.database import DatabaseManager
 from job_harvest.db_models import AppSettingsRecord, CollectionRunRecord, JobPostingRecord, utcnow
 from job_harvest.extract import DetailFetchResult
+from job_harvest.request_parser import interpret_collection_request
 from job_harvest.runner import collect_postings
 from job_harvest.schemas import (
     DashboardSummaryRead,
+    RequestInterpretRead,
     SchedulerJobRead,
     SchedulerStatusRead,
     SettingsPayload,
@@ -91,6 +94,9 @@ class SettingsService:
                 "ai_provider": payload.ai_provider,
                 "ai_model": payload.ai_model,
                 "user_agent": payload.user_agent,
+                "browser_enabled": payload.browser_enabled,
+                "browser_headless": payload.browser_headless,
+                "browser_timeout_seconds": payload.browser_timeout_seconds,
             },
             "criteria": {
                 "roles": payload.roles,
@@ -149,6 +155,9 @@ class SettingsService:
                 ai_provider=payload["search"].get("ai_provider", "heuristic"),
                 ai_model=payload["search"].get("ai_model", ""),
                 user_agent=payload["search"]["user_agent"],
+                browser_enabled=payload["search"].get("browser_enabled", True),
+                browser_headless=payload["search"].get("browser_headless", True),
+                browser_timeout_seconds=payload["search"].get("browser_timeout_seconds", 60),
                 output_dir=payload["output_dir"],
                 schedule_enabled=payload["schedule"]["enabled"],
                 schedule_mode=payload["schedule"]["mode"],
@@ -188,6 +197,9 @@ class SettingsService:
             ai_provider=record.ai_provider,
             ai_model=record.ai_model,
             user_agent=record.user_agent,
+            browser_enabled=record.browser_enabled,
+            browser_headless=record.browser_headless,
+            browser_timeout_seconds=record.browser_timeout_seconds,
             output_dir=record.output_dir,
             schedule_enabled=record.schedule_enabled,
             schedule_mode=record.schedule_mode,
@@ -225,6 +237,9 @@ class SettingsService:
         record.ai_provider = payload.ai_provider
         record.ai_model = payload.ai_model
         record.user_agent = payload.user_agent
+        record.browser_enabled = payload.browser_enabled
+        record.browser_headless = payload.browser_headless
+        record.browser_timeout_seconds = payload.browser_timeout_seconds
         record.output_dir = payload.output_dir
         record.schedule_enabled = payload.schedule_enabled
         record.schedule_mode = payload.schedule_mode
@@ -232,6 +247,20 @@ class SettingsService:
         record.schedule_interval_hours = payload.schedule_interval_hours
         record.schedule_run_on_start = payload.schedule_run_on_start
         record.schedule_timezone = payload.schedule_timezone
+
+    def interpret_request(
+        self,
+        text: str,
+        base_payload: SettingsPayload | None = None,
+    ) -> RequestInterpretRead:
+        current_payload = base_payload or self.get_payload()
+        interpretation = interpret_collection_request(text=text, current_payload=current_payload)
+        return RequestInterpretRead(
+            provider=interpretation.provider,
+            model=interpretation.model,
+            notes=interpretation.notes,
+            payload=interpretation.payload,
+        )
 
 
 class CollectorService:
@@ -272,6 +301,8 @@ class CollectorService:
             export_dir = persist_run(
                 output_dir=config.output_dir,
                 postings=execution.relevant_postings,
+                all_postings=execution.all_postings,
+                raw_manifest=execution.raw_manifest,
                 queries=execution.queries,
                 config_source=config.config_source,
                 store_html=config.search.store_html,
@@ -370,6 +401,32 @@ class CollectorService:
         with self._db.session_factory() as session:
             stmt = select(CollectionRunRecord).order_by(CollectionRunRecord.started_at.desc()).limit(limit)
             return list(session.scalars(stmt).all())
+
+    def get_run(self, run_id: int) -> CollectionRunRecord | None:
+        with self._db.session_factory() as session:
+            return session.get(CollectionRunRecord, run_id)
+
+    def get_job(self, job_id: int) -> JobPostingRecord | None:
+        with self._db.session_factory() as session:
+            return session.get(JobPostingRecord, job_id)
+
+    def get_run_postings(self, run_id: int) -> list[dict[str, object]]:
+        run = self.get_run(run_id)
+        if run is None or not run.export_path:
+            return []
+        path = Path(run.export_path) / "all_postings.json"
+        if not path.exists():
+            return []
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def get_run_raw_manifest(self, run_id: int) -> list[dict[str, object]]:
+        run = self.get_run(run_id)
+        if run is None or not run.export_path:
+            return []
+        path = Path(run.export_path) / "raw_manifest.json"
+        if not path.exists():
+            return []
+        return json.loads(path.read_text(encoding="utf-8"))
 
     def dashboard_summary(self, scheduler_status: SchedulerStatusRead) -> DashboardSummaryRead:
         with self._db.session_factory() as session:

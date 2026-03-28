@@ -2,108 +2,91 @@
 
 Korean translation: [README.ko.md](./README.ko.md)
 
-FastAPI based job posting collector and web dashboard.
+FastAPI-based job posting collector and manual collection console.
 
-The server can:
+## What It Does
 
-- save crawl settings from the web UI
-- collect broad IT/developer job postings on demand
-- collect on fixed times or hourly intervals
-- store structured metadata in SQLite and raw HTML snapshots as compressed blobs
-- summarize detail pages with heuristic extraction or OpenAI
-- show collected postings and run history in the browser
+- saves collection settings from the web UI
+- collects broad IT and developer job postings on demand
+- stores normalized posting records in SQLite
+- stores raw listing and detail responses as compressed blobs
+- enriches detail pages with heuristic extraction or OpenAI
+- exposes run history, job detail, and raw snapshot views in the browser
 
 ## Stack
 
 - Backend: FastAPI
-- Scheduler: APScheduler
 - ORM: SQLAlchemy
-- Template UI: Jinja2 + Vanilla JavaScript
-- Default DB: SQLite
+- UI: Jinja2 + Vanilla JavaScript
+- Default database: SQLite
+- Optional AI enrichment: OpenAI API
 
 ## Quick Start For Git Bash
-
-Move to the workspace and create the virtual environment once:
 
 ```bash
 git clone <repository-url>
 cd job-posting-server
 python -m venv .venv
 ./.venv/Scripts/python.exe -m pip install -r requirements.txt
-```
-
-After that, run the menu script:
-
-```bash
-cd job-posting-server
 ./job_harvest.sh
 ```
 
-The menu lets you choose:
+The menu lets you:
 
 - install or update dependencies
 - start the web server
 - start the web server with reload
 - run one collection from `config.yaml`
-- start scheduled collection from `config.yaml`
 - show generated queries
 - run tests
 - change config path, host, and port
 
-## Collection Model
+## Manual-First Workflow
 
-The current default mode is `broad_it_scan`.
+1. Start the server.
+2. Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+3. Save collection settings in the web UI.
+4. Trigger a run from the dashboard or `POST /api/collect`.
+5. Review:
+   - `/jobs` for normalized postings
+   - `/jobs/{job_id}` for normalized plus raw-linked detail
+   - `/runs/{run_id}` for run-scoped postings and raw manifest
+   - `/raw/{category}/{sha256}` for stored raw bodies
 
-- The collector crawls multiple broad IT seeds instead of relying on one oversized search string.
-- Listing pages are paginated until the site stops returning new URLs, unless `listing_page_limit` is set.
-- Raw listing/detail HTML is stored as compressed blobs under `data/raw/`.
-- URL-based deduplication prevents repeated detail fetches for already-known postings inside the refetch window.
-- Job detail content is summarized into normalized fields such as job family, tech stack, requirements, responsibilities, and benefits.
+## Collector Model
 
-If you want AI enrichment with OpenAI:
+The default mode is `broad_it_scan`.
 
-- set `OPENAI_API_KEY` in your local environment
-- switch the UI setting `AI provider` to `openai`
-- set an `AI model` in the UI or `config.yaml`
+- The collector uses multiple broad IT seeds instead of one oversized query string.
+- Listing pages are paginated until a site stops returning new URLs, unless `listing_page_limit` is set.
+- URL-centered deduplication avoids repeated detail fetches inside the refetch window.
+- Raw listing and detail payloads are stored separately from normalized job rows.
+- AI enrichment summarizes detail pages into job family, tech stack, requirements, responsibilities, and benefits.
 
-## Manual Commands
+If you want OpenAI enrichment:
 
-If you want to bypass the menu:
+- set `OPENAI_API_KEY` in the server environment
+- change the UI setting `AI provider` to `openai`
+- set an `AI model` in the UI
+
+## Useful Commands
 
 ```bash
-cd job-posting-server
 ./.venv/Scripts/python.exe -m job_harvest serve --host 127.0.0.1 --port 8000
-```
-
-Other useful commands:
-
-```bash
 ./.venv/Scripts/python.exe -m job_harvest serve --host 127.0.0.1 --port 8000 --reload
 ./.venv/Scripts/python.exe -m job_harvest --config ./config.yaml run
-./.venv/Scripts/python.exe -m job_harvest --config ./config.yaml schedule
 ./.venv/Scripts/python.exe -m job_harvest --config ./config.yaml show-queries
 ./.venv/Scripts/python.exe -m unittest discover -s tests -v
 ```
 
-Open the browser at [http://127.0.0.1:8000](http://127.0.0.1:8000).
-
 ## Environment Variables
 
 - `JOB_HARVEST_DATABASE_URL`
-  - Default is SQLite.
-  - You can point this to PostgreSQL or Supabase later.
+  Use PostgreSQL or Supabase instead of SQLite if needed.
 - `JOB_HARVEST_DATA_DIR`
-  - Changes the base directory for SQLite and exports.
+  Changes the base directory for SQLite, raw blobs, and exports.
 - `OPENAI_API_KEY`
-  - Required only when `AI provider` is set to `openai`.
-
-## Settings Flow
-
-When the server starts:
-
-- if DB settings already exist, the server uses DB values
-- if DB settings do not exist yet and `config.yaml` exists, the server loads initial values from `config.yaml`
-- after that, settings saved in the web UI become the main source of truth
+  Required only when `AI provider` is set to `openai`.
 
 ## Main API
 
@@ -111,8 +94,10 @@ When the server starts:
 - `PUT /api/settings`
 - `POST /api/collect`
 - `GET /api/jobs`
+- `GET /api/jobs/{job_id}`
 - `GET /api/runs`
-- `GET /api/scheduler`
+- `GET /api/runs/{run_id}`
+- `GET /api/raw/{category}/{sha256_hex}`
 - `GET /health`
 
 ## Data Paths
@@ -120,7 +105,12 @@ When the server starts:
 Default local data is stored under `data/`.
 
 - `data/app.db`: SQLite database
-- `data/raw/...`: compressed raw listing/detail HTML blobs
+- `data/raw/...`: compressed raw listing and detail blobs
 - `data/exports/runs/...`: per-run JSON, CSV, and Markdown exports
 
 These paths are ignored by Git through `.gitignore`.
+
+## Project Docs
+
+- Project identity: [docs/project-identity.ko.md](./docs/project-identity.ko.md)
+- Agent skill pack: [agent-pack/README.md](./agent-pack/README.md)

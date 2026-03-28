@@ -70,6 +70,30 @@ a {
   color: var(--muted);
 }
 
+.locale-switch {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.locale-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.locale-link {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(83, 64, 46, 0.16);
+  color: var(--muted);
+}
+
+.locale-link.active {
+  background: rgba(184, 92, 56, 0.12);
+  color: var(--text);
+}
+
 .nav {
   display: grid;
   gap: 10px;
@@ -300,6 +324,10 @@ textarea {
   background: rgba(255, 255, 255, 0.72);
 }
 
+.is-hidden {
+  display: none !important;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -359,7 +387,92 @@ th {
 }
 
 .job-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
   font-weight: 700;
+  text-align: left;
+}
+
+.detail-drawer {
+  margin-top: 18px;
+  border: 1px solid rgba(184, 92, 56, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(248, 239, 230, 0.94)),
+    var(--paper);
+}
+
+.detail-drawer-content {
+  display: grid;
+  gap: 18px;
+}
+
+.detail-drawer-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.detail-block {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(83, 64, 46, 0.08);
+  background: rgba(255, 252, 246, 0.9);
+}
+
+.detail-block h3,
+.detail-list-section h4 {
+  margin: 0 0 12px;
+}
+
+.detail-kv {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.detail-kv dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.detail-kv dd {
+  margin: 0;
+}
+
+.detail-list-section + .detail-list-section {
+  margin-top: 14px;
+}
+
+.detail-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(184, 92, 56, 0.12);
+  color: var(--accent-dark);
+}
+
+.detail-pre {
+  margin: 0;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(83, 64, 46, 0.08);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @media (max-width: 1100px) {
@@ -369,7 +482,9 @@ th {
   .two-column,
   .filter-bar,
   .checkbox-grid,
-  .field-grid {
+  .field-grid,
+  .detail-drawer-grid,
+  .detail-kv {
     grid-template-columns: 1fr;
   }
 

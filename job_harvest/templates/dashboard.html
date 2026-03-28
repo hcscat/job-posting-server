@@ -2,42 +2,40 @@
 {% block content %}
 <section class="hero">
   <div>
-    <p class="eyebrow">수집 서버 상태</p>
-    <h1>광범위 IT 채용 수집과 상세 정리 상태를 한 화면에서 봅니다.</h1>
-    <p class="hero-copy">
-      현재 저장된 IT 공고 {{ summary.total_postings }}건, 실행 기록 {{ summary.total_runs }}회입니다.
-      {% if summary.is_collecting %}수집 작업이 진행 중입니다.{% else %}지금은 대기 상태입니다.{% endif %}
-    </p>
+    <p class="eyebrow">{{ tr('dashboard.eyebrow') }}</p>
+    <h1>{{ tr('dashboard.hero_title') }}</h1>
+    <p class="hero-copy">{{ tr('dashboard.hero_copy', total_postings=summary.total_postings, total_runs=summary.total_runs) }}</p>
+    <p class="hero-copy">{{ tr('dashboard.hero_note') }}</p>
   </div>
   <div class="hero-actions">
-    <button id="run-now-button" class="button primary">지금 수집</button>
-    <a class="button ghost" href="/settings">설정 열기</a>
+    <a class="button primary" href="/settings">{{ tr('dashboard.open_settings') }}</a>
+    <a class="button ghost" href="/jobs">{{ tr('dashboard.browse_jobs') }}</a>
   </div>
 </section>
 
 <section class="card-grid">
   <article class="card stat">
-    <span class="label">저장 IT 공고</span>
+    <span class="label">{{ tr('dashboard.metric_stored_jobs') }}</span>
     <strong>{{ summary.total_postings }}</strong>
   </article>
   <article class="card stat">
-    <span class="label">실행 기록</span>
+    <span class="label">{{ tr('dashboard.metric_collection_runs') }}</span>
     <strong>{{ summary.total_runs }}</strong>
   </article>
   <article class="card stat">
-    <span class="label">미정리 공고</span>
+    <span class="label">{{ tr('dashboard.metric_pending_enrichment') }}</span>
     <strong>{{ summary.pending_enrichment }}</strong>
   </article>
   <article class="card stat">
-    <span class="label">다음 실행 슬롯</span>
-    <strong>{{ summary.scheduler.jobs[0].next_run_at if summary.scheduler.jobs else '예약 없음' }}</strong>
+    <span class="label">{{ tr('dashboard.metric_collector_state') }}</span>
+    <strong>{{ tr('dashboard.state_running') if summary.is_collecting else tr('dashboard.state_idle') }}</strong>
   </article>
 </section>
 
 <section class="panel-grid">
   <article class="panel">
     <div class="panel-header">
-      <h2>사이트별 저장 수</h2>
+      <h2>{{ tr('dashboard.coverage_by_site') }}</h2>
     </div>
     <div class="site-list">
       {% for row in summary.site_counts %}
@@ -46,53 +44,46 @@
         <strong>{{ row.count }}</strong>
       </div>
       {% else %}
-      <p class="muted">아직 저장된 공고가 없습니다.</p>
+      <p class="muted">{{ tr('dashboard.no_postings') }}</p>
       {% endfor %}
     </div>
   </article>
 
-  <article class="panel">
+  <article class="panel note-panel">
     <div class="panel-header">
-      <h2>예약 작업</h2>
+      <h2>{{ tr('dashboard.how_it_works') }}</h2>
     </div>
-    <div class="run-list">
-      {% for job in summary.scheduler.jobs %}
-      <div class="run-row">
-        <div>
-          <strong>{{ job.job_id }}</strong>
-          <p>{{ job.description }}</p>
-        </div>
-        <span>{{ job.next_run_at or '대기 없음' }}</span>
-      </div>
-      {% else %}
-      <p class="muted">현재 등록된 예약이 없습니다.</p>
-      {% endfor %}
-    </div>
+    <ul class="note-list">
+      <li>{{ tr('dashboard.note_ai_or_api') }}</li>
+      <li>{{ tr('dashboard.note_raw_normalized') }}</li>
+      <li>{{ tr('dashboard.note_run_detail') }}</li>
+      <li>{{ tr('dashboard.note_job_browse') }}</li>
+    </ul>
   </article>
 </section>
 
 <section class="panel">
   <div class="panel-header">
-    <h2>최근 실행</h2>
+    <h2>{{ tr('dashboard.recent_runs') }}</h2>
   </div>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>ID</th>
-          <th>시작</th>
-          <th>상태</th>
-          <th>발견/관련</th>
-          <th>중복 스킵</th>
-          <th>AI 정리</th>
-          <th>원문 바이트</th>
-          <th>메시지</th>
+          <th>{{ tr('dashboard.table.id') }}</th>
+          <th>{{ tr('dashboard.table.started') }}</th>
+          <th>{{ tr('dashboard.table.status') }}</th>
+          <th>{{ tr('dashboard.table.unique_relevant') }}</th>
+          <th>{{ tr('dashboard.table.duplicates') }}</th>
+          <th>{{ tr('dashboard.table.ai_enriched') }}</th>
+          <th>{{ tr('dashboard.table.raw_bytes') }}</th>
+          <th>{{ tr('dashboard.table.message') }}</th>
         </tr>
       </thead>
       <tbody id="recent-runs-body">
         {% for run in summary.recent_runs %}
         <tr>
-          <td>{{ run.id }}</td>
+          <td><a href="/runs/{{ run.id }}">{{ run.id }}</a></td>
           <td>{{ run.started_at }}</td>
           <td><span class="pill {{ run.status }}">{{ run.status }}</span></td>
           <td>{{ run.unique_hit_count }} / {{ run.relevant_count }}</td>
@@ -103,7 +94,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="8" class="muted center">실행 기록이 없습니다.</td>
+          <td colspan="8" class="muted center">{{ tr('dashboard.no_runs') }}</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -45,6 +45,9 @@ class AppSettingsRecord(Base):
     ai_provider: Mapped[str] = mapped_column(String(50), default="heuristic")
     ai_model: Mapped[str] = mapped_column(String(120), default="")
     user_agent: Mapped[str] = mapped_column(Text, default="")
+    browser_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    browser_headless: Mapped[bool] = mapped_column(Boolean, default=True)
+    browser_timeout_seconds: Mapped[int] = mapped_column(Integer, default=60)
     output_dir: Mapped[str] = mapped_column(String(500), default="./data/exports")
 
     schedule_enabled: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -13,6 +13,8 @@ from job_harvest.models import JobPosting
 def persist_run(
     output_dir: Path,
     postings: list[JobPosting],
+    all_postings: list[JobPosting],
+    raw_manifest: list[dict[str, object]],
     queries: list[str],
     config_source: str,
     store_html: bool,
@@ -35,7 +37,10 @@ def persist_run(
             posting.html_path = str(html_path)
 
     rows = [posting.to_dict() for posting in postings]
+    all_rows = [posting.to_dict() for posting in all_postings]
     write_json(run_dir / "results.json", rows)
+    write_json(run_dir / "all_postings.json", all_rows)
+    write_json(run_dir / "raw_manifest.json", raw_manifest)
     write_csv(run_dir / "results.csv", rows)
     write_summary(run_dir / "summary.md", postings, queries, config_source)
     return run_dir
@@ -124,9 +129,9 @@ def write_summary(
     lines.extend(["", "## Top Results Preview", ""])
     if postings:
         for posting in postings[:50]:
-            title = posting.title or posting.search_title or "(제목 없음)"
-            company = posting.company or "회사 미확인"
-            location = posting.location or "지역 미확인"
+            title = posting.title or posting.search_title or "(untitled)"
+            company = posting.company or "company unavailable"
+            location = posting.location or "location unavailable"
             family = posting.ai_job_family or "unclassified"
             lines.append(f"- [{posting.site_name}] {title} | {company} | {location} | {family} | {posting.url}")
     else:
