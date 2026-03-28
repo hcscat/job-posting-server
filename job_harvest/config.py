@@ -9,6 +9,22 @@ import yaml
 
 DEFAULT_SITE_KEYS = ["saramin", "jobkorea", "linkedin"]
 DEFAULT_EXTRA_TERMS = ["채용", "공고"]
+DEFAULT_IT_CRAWL_TERMS = [
+    "개발",
+    "웹 개발",
+    "앱 개발",
+    "데이터",
+    "보안",
+    "클라우드",
+    "frontend",
+    "backend",
+    "fullstack",
+    "소프트웨어 엔지니어",
+    "software engineer",
+    "DevOps",
+    "data engineer",
+    "machine learning",
+]
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
@@ -19,12 +35,19 @@ DEFAULT_USER_AGENT = (
 class SearchConfig:
     sites: list[str] = field(default_factory=lambda: list(DEFAULT_SITE_KEYS))
     queries: list[str] = field(default_factory=list)
+    crawl_strategy: str = "broad_it_scan"
+    crawl_terms: list[str] = field(default_factory=lambda: list(DEFAULT_IT_CRAWL_TERMS))
+    listing_page_limit: int = 0
     max_results_per_site: int = 8
     request_timeout_seconds: int = 20
     fetch_details: bool = True
     store_html: bool = False
+    detail_refetch_hours: int = 24
     concurrency: int = 4
     pause_between_searches_seconds: float = 1.0
+    ai_enrichment_enabled: bool = False
+    ai_provider: str = "heuristic"
+    ai_model: str = ""
     user_agent: str = DEFAULT_USER_AGENT
 
 
@@ -72,17 +95,32 @@ def _ensure_list(value: Any) -> list[str]:
 
 
 def _build_search_config(raw: dict[str, Any]) -> SearchConfig:
+    crawl_strategy = str(raw.get("crawl_strategy", "broad_it_scan")).strip() or "broad_it_scan"
+    if crawl_strategy not in {"broad_it_scan", "query_search"}:
+        raise ValueError("search.crawl_strategy must be 'broad_it_scan' or 'query_search'")
+
+    ai_provider = str(raw.get("ai_provider", "heuristic")).strip() or "heuristic"
+    if ai_provider not in {"heuristic", "openai"}:
+        raise ValueError("search.ai_provider must be 'heuristic' or 'openai'")
+
     return SearchConfig(
         sites=_ensure_list(raw.get("sites")) or list(DEFAULT_SITE_KEYS),
         queries=_ensure_list(raw.get("queries")),
+        crawl_strategy=crawl_strategy,
+        crawl_terms=_ensure_list(raw.get("crawl_terms")) or list(DEFAULT_IT_CRAWL_TERMS),
+        listing_page_limit=max(0, int(raw.get("listing_page_limit", 0))),
         max_results_per_site=max(1, int(raw.get("max_results_per_site", 8))),
         request_timeout_seconds=max(5, int(raw.get("request_timeout_seconds", 20))),
         fetch_details=bool(raw.get("fetch_details", True)),
         store_html=bool(raw.get("store_html", False)),
+        detail_refetch_hours=max(1, int(raw.get("detail_refetch_hours", 24))),
         concurrency=max(1, int(raw.get("concurrency", 4))),
         pause_between_searches_seconds=max(
             0.0, float(raw.get("pause_between_searches_seconds", 1.0))
         ),
+        ai_enrichment_enabled=bool(raw.get("ai_enrichment_enabled", False)),
+        ai_provider=ai_provider,
+        ai_model=str(raw.get("ai_model", "")).strip(),
         user_agent=str(raw.get("user_agent", DEFAULT_USER_AGENT)).strip() or DEFAULT_USER_AGENT,
     )
 
@@ -156,12 +194,19 @@ def config_to_dict(config: AppConfig) -> dict[str, Any]:
         "search": {
             "sites": list(config.search.sites),
             "queries": list(config.search.queries),
+            "crawl_strategy": config.search.crawl_strategy,
+            "crawl_terms": list(config.search.crawl_terms),
+            "listing_page_limit": config.search.listing_page_limit,
             "max_results_per_site": config.search.max_results_per_site,
             "request_timeout_seconds": config.search.request_timeout_seconds,
             "fetch_details": config.search.fetch_details,
             "store_html": config.search.store_html,
+            "detail_refetch_hours": config.search.detail_refetch_hours,
             "concurrency": config.search.concurrency,
             "pause_between_searches_seconds": config.search.pause_between_searches_seconds,
+            "ai_enrichment_enabled": config.search.ai_enrichment_enabled,
+            "ai_provider": config.search.ai_provider,
+            "ai_model": config.search.ai_model,
             "user_agent": config.search.user_agent,
         },
         "criteria": {

@@ -6,7 +6,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from job_harvest.config import DEFAULT_EXTRA_TERMS, DEFAULT_SITE_KEYS, DEFAULT_USER_AGENT
+from job_harvest.config import (
+    DEFAULT_EXTRA_TERMS,
+    DEFAULT_IT_CRAWL_TERMS,
+    DEFAULT_SITE_KEYS,
+    DEFAULT_USER_AGENT,
+)
 from job_harvest.sites import DEFAULT_SITES
 
 
@@ -27,6 +32,9 @@ class SettingsPayload(BaseModel):
 
     site_keys: list[str] = Field(default_factory=lambda: list(DEFAULT_SITE_KEYS))
     queries: list[str] = Field(default_factory=list)
+    crawl_strategy: Literal["broad_it_scan", "query_search"] = "broad_it_scan"
+    crawl_terms: list[str] = Field(default_factory=lambda: list(DEFAULT_IT_CRAWL_TERMS))
+    listing_page_limit: int = 0
     roles: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
     exclude_keywords: list[str] = Field(default_factory=list)
@@ -43,8 +51,12 @@ class SettingsPayload(BaseModel):
     request_timeout_seconds: int = 20
     fetch_details: bool = True
     store_html: bool = False
+    detail_refetch_hours: int = 24
     concurrency: int = 4
     pause_between_searches_seconds: float = 1.0
+    ai_enrichment_enabled: bool = False
+    ai_provider: Literal["heuristic", "openai"] = "heuristic"
+    ai_model: str = ""
     user_agent: str = DEFAULT_USER_AGENT
     output_dir: str = "./data/exports"
 
@@ -58,6 +70,7 @@ class SettingsPayload(BaseModel):
     @field_validator(
         "site_keys",
         "queries",
+        "crawl_terms",
         "roles",
         "keywords",
         "exclude_keywords",
@@ -99,10 +112,17 @@ class SettingsPayload(BaseModel):
                 raise ValueError("Schedule times must use HH:MM format.")
         return cleaned
 
-    @field_validator("max_results_per_site", "request_timeout_seconds", "concurrency", "schedule_interval_hours")
+    @field_validator(
+        "listing_page_limit",
+        "max_results_per_site",
+        "request_timeout_seconds",
+        "detail_refetch_hours",
+        "concurrency",
+        "schedule_interval_hours",
+    )
     @classmethod
     def validate_positive_ints(cls, value: int) -> int:
-        return max(1, value)
+        return max(0, value) if value == 0 else max(1, value)
 
     @field_validator("pause_between_searches_seconds")
     @classmethod
@@ -120,8 +140,14 @@ class CollectionRunRead(BaseModel):
     hit_count: int
     unique_hit_count: int
     saved_count: int
+    relevant_count: int
     new_count: int
     updated_count: int
+    listing_page_count: int
+    detail_page_count: int
+    duplicate_skip_count: int
+    ai_enriched_count: int
+    raw_bytes_written: int
     query_terms: list[str]
     site_keys: list[str]
     export_path: str
@@ -153,7 +179,23 @@ class JobPostingRead(BaseModel):
     extraction_method: str
     status_code: int
     tags: list[str]
+    listing_snapshot_sha256: str
+    detail_snapshot_sha256: str
+    is_it_job: bool
+    ai_provider: str
+    ai_model: str
+    ai_summary: str
+    ai_relevance_reason: str
+    ai_job_family: str
+    ai_seniority: str
+    ai_work_model: str
+    ai_tech_stack: list[str]
+    ai_requirements: list[str]
+    ai_responsibilities: list[str]
+    ai_benefits: list[str]
     discovered_at: datetime | None
+    detail_fetched_at: datetime | None
+    enriched_at: datetime | None
     first_seen_at: datetime
     last_seen_at: datetime
     seen_count: int
@@ -185,6 +227,7 @@ class SchedulerStatusRead(BaseModel):
 class DashboardSummaryRead(BaseModel):
     total_postings: int
     total_runs: int
+    pending_enrichment: int
     is_collecting: bool
     site_counts: list[SiteCountRead]
     recent_runs: list[CollectionRunRead]

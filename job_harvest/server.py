@@ -104,14 +104,18 @@ def create_app(
         site: str = "",
         company: str = "",
         location: str = "",
+        it_only: bool = True,
+        job_family: str = "",
         page: int = 1,
-        page_size: int = 25,
+        page_size: int = 50,
     ) -> HTMLResponse:
         result = collector_service.list_jobs(
             q=q,
             site=site,
             company=company,
             location=location,
+            it_only=it_only,
+            job_family=job_family,
             page=page,
             page_size=page_size,
         )
@@ -126,8 +130,26 @@ def create_app(
                 "page": result.page,
                 "page_size": result.page_size,
                 "total_pages": total_pages,
-                "filters": {"q": q, "site": site, "company": company, "location": location},
+                "filters": {
+                    "q": q,
+                    "site": site,
+                    "company": company,
+                    "location": location,
+                    "it_only": it_only,
+                    "job_family": job_family,
+                },
                 "available_sites": list(DEFAULT_SITES.values()),
+                "job_families": [
+                    "frontend",
+                    "backend",
+                    "fullstack",
+                    "data",
+                    "mobile",
+                    "devops",
+                    "security",
+                    "ai-ml",
+                    "general-software",
+                ],
             },
         )
 
@@ -155,14 +177,18 @@ def create_app(
         site: str = "",
         company: str = "",
         location: str = "",
+        it_only: bool = True,
+        job_family: str = "",
         page: int = Query(default=1, ge=1),
-        page_size: int = Query(default=25, ge=1, le=200),
+        page_size: int = Query(default=50, ge=1, le=200),
     ) -> JobListResponse:
         result = collector_service.list_jobs(
             q=q,
             site=site,
             company=company,
             location=location,
+            it_only=it_only,
+            job_family=job_family,
             page=page,
             page_size=page_size,
         )
@@ -174,7 +200,7 @@ def create_app(
         )
 
     @app.get("/api/runs", response_model=list[CollectionRunRead])
-    async def api_runs(limit: int = Query(default=20, ge=1, le=100)) -> list[CollectionRunRead]:
+    async def api_runs(limit: int = Query(default=50, ge=1, le=200)) -> list[CollectionRunRead]:
         return [CollectionRunRead.model_validate(run) for run in collector_service.list_runs(limit=limit)]
 
     @app.get("/api/scheduler")

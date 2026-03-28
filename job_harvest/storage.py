@@ -65,11 +65,27 @@ def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
         "summary",
         "source_query",
         "discovered_at",
+        "detail_fetched_at",
+        "enriched_at",
         "pub_date",
         "extraction_method",
         "status_code",
         "html_path",
         "tags",
+        "is_it_job",
+        "ai_provider",
+        "ai_model",
+        "ai_summary",
+        "ai_relevance_reason",
+        "ai_job_family",
+        "ai_seniority",
+        "ai_work_model",
+        "ai_tech_stack",
+        "ai_requirements",
+        "ai_responsibilities",
+        "ai_benefits",
+        "listing_snapshot_sha256",
+        "detail_snapshot_sha256",
     ]
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -105,13 +121,14 @@ def write_summary(
     else:
         lines.append("- No postings matched the current filters.")
 
-    lines.extend(["", "## Top Results", ""])
+    lines.extend(["", "## Top Results Preview", ""])
     if postings:
-        for posting in postings[:20]:
+        for posting in postings[:50]:
             title = posting.title or posting.search_title or "(제목 없음)"
             company = posting.company or "회사 미확인"
             location = posting.location or "지역 미확인"
-            lines.append(f"- [{posting.site_name}] {title} | {company} | {location} | {posting.url}")
+            family = posting.ai_job_family or "unclassified"
+            lines.append(f"- [{posting.site_name}] {title} | {company} | {location} | {family} | {posting.url}")
     else:
         lines.append("- No postings saved in this run.")
 

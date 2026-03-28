@@ -1,6 +1,6 @@
 function splitLines(value) {
   return value
-    .split(/\r?\n/)
+    .split(/[\r\n,]+/)
     .map((item) => item.trim())
     .filter(Boolean);
 }
@@ -31,8 +31,10 @@ async function refreshDashboardRuns() {
         <td>${run.id}</td>
         <td>${run.started_at}</td>
         <td><span class="pill ${run.status}">${run.status}</span></td>
-        <td>${run.triggered_by}</td>
-        <td>${run.saved_count}</td>
+        <td>${run.unique_hit_count} / ${run.relevant_count}</td>
+        <td>${run.duplicate_skip_count}</td>
+        <td>${run.ai_enriched_count}</td>
+        <td>${run.raw_bytes_written}</td>
         <td>${run.message}</td>
       </tr>`
     )
@@ -50,6 +52,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     [
       "queries",
+      "crawl_strategy",
+      "crawl_terms",
+      "listing_page_limit",
       "roles",
       "keywords",
       "exclude_keywords",
@@ -65,8 +70,12 @@ document.addEventListener("DOMContentLoaded", () => {
       "output_dir",
       "max_results_per_site",
       "request_timeout_seconds",
+      "detail_refetch_hours",
       "concurrency",
       "pause_between_searches_seconds",
+      "ai_enrichment_enabled",
+      "ai_provider",
+      "ai_model",
       "schedule_enabled",
       "schedule_mode",
       "schedule_times",
@@ -83,6 +92,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const payload = {
         site_keys: Array.from(document.querySelectorAll('input[name="site_keys"]:checked')).map((item) => item.value),
         queries: splitLines(document.getElementById("queries").value),
+        crawl_strategy: document.getElementById("crawl_strategy").value,
+        crawl_terms: splitLines(document.getElementById("crawl_terms").value),
+        listing_page_limit: Number(document.getElementById("listing_page_limit").value || 0),
         roles: splitLines(document.getElementById("roles").value),
         keywords: splitLines(document.getElementById("keywords").value),
         exclude_keywords: splitLines(document.getElementById("exclude_keywords").value),
@@ -98,8 +110,12 @@ document.addEventListener("DOMContentLoaded", () => {
         request_timeout_seconds: Number(document.getElementById("request_timeout_seconds").value || 20),
         fetch_details: document.getElementById("fetch_details").checked,
         store_html: document.getElementById("store_html").checked,
+        detail_refetch_hours: Number(document.getElementById("detail_refetch_hours").value || 24),
         concurrency: Number(document.getElementById("concurrency").value || 4),
         pause_between_searches_seconds: Number(document.getElementById("pause_between_searches_seconds").value || 1),
+        ai_enrichment_enabled: document.getElementById("ai_enrichment_enabled").checked,
+        ai_provider: document.getElementById("ai_provider").value,
+        ai_model: document.getElementById("ai_model").value.trim(),
         user_agent: document.getElementById("user_agent").value.trim(),
         output_dir: document.getElementById("output_dir").value.trim() || "./data/exports",
         schedule_enabled: document.getElementById("schedule_enabled").checked,

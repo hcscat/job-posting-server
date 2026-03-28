@@ -27,6 +27,7 @@ class SearchHit:
     employment_type: str = ""
     experience_level: str = ""
     education_level: str = ""
+    listing_snapshot_sha256: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -58,8 +59,28 @@ class JobPosting:
     status_code: int = 0
     html_path: str = ""
     tags: list[str] = field(default_factory=list)
+    listing_snapshot_sha256: str = ""
+    detail_snapshot_sha256: str = ""
+    is_it_job: bool = True
+    ai_provider: str = ""
+    ai_model: str = ""
+    ai_summary: str = ""
+    ai_relevance_reason: str = ""
+    ai_job_family: str = ""
+    ai_seniority: str = ""
+    ai_work_model: str = ""
+    ai_tech_stack: list[str] = field(default_factory=list)
+    ai_requirements: list[str] = field(default_factory=list)
+    ai_responsibilities: list[str] = field(default_factory=list)
+    ai_benefits: list[str] = field(default_factory=list)
+    detail_fetched_at: str = ""
+    enriched_at: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["tags"] = ", ".join(self.tags)
+        payload["ai_tech_stack"] = ", ".join(self.ai_tech_stack)
+        payload["ai_requirements"] = ", ".join(self.ai_requirements)
+        payload["ai_responsibilities"] = ", ".join(self.ai_responsibilities)
+        payload["ai_benefits"] = ", ".join(self.ai_benefits)
         return payload

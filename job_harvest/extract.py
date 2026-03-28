@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from html import unescape
 from typing import Any
 
@@ -10,6 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from job_harvest.models import JobPosting, SearchHit
+from job_harvest.raw_store import RawSnapshotStore, SnapshotRef
 
 
 TAG_RE = re.compile(r"<[^>]+>")
@@ -18,6 +20,8 @@ TAG_RE = re.compile(r"<[^>]+>")
 @dataclass
 class DetailFetchResult:
     posting: JobPosting
+    listing_snapshot: SnapshotRef | None = None
+    detail_snapshot: SnapshotRef | None = None
     html: str = ""
 
 
@@ -26,6 +30,7 @@ def fetch_job_details(
     hit: SearchHit,
     timeout_seconds: int,
     store_html: bool,
+    raw_store: RawSnapshotStore | None = None,
 ) -> DetailFetchResult:
     posting = JobPosting(
         site_key=hit.site_key,
@@ -42,7 +47,10 @@ def fetch_job_details(
         employment_type=hit.employment_type,
         experience_level=hit.experience_level,
         education_level=hit.education_level,
+        listing_snapshot_sha256=hit.listing_snapshot_sha256,
     )
+    listing_snapshot = None
+    detail_snapshot = None
     try:
         response = requests.get(hit.url, headers=headers, timeout=timeout_seconds)
         posting.status_code = response.status_code
@@ -50,9 +58,13 @@ def fetch_job_details(
     except requests.RequestException:
         posting.title = hit.search_title
         posting.summary = hit.snippet
-        return DetailFetchResult(posting=posting)
+        posting.detail_fetched_at = datetime.now(timezone.utc).isoformat()
+        return DetailFetchResult(posting=posting, listing_snapshot=listing_snapshot)
 
     html = response.text
+    if raw_store is not None:
+        detail_snapshot = raw_store.store_text(category="detail", url=hit.url, text=html)
+        posting.detail_snapshot_sha256 = detail_snapshot.sha256_hex
     soup = BeautifulSoup(html, "html.parser")
     structured = extract_job_posting_from_json_ld(soup)
 
@@ -74,11 +86,17 @@ def fetch_job_details(
     )
     posting.extraction_method = structured.get("method", "meta")
     posting.tags = structured.get("tags", [])
+    posting.detail_fetched_at = datetime.now(timezone.utc).isoformat()
 
     if not posting.description:
         posting.description = posting.summary
 
-    return DetailFetchResult(posting=posting, html=html if store_html else "")
+    return DetailFetchResult(
+        posting=posting,
+        listing_snapshot=listing_snapshot,
+        detail_snapshot=detail_snapshot,
+        html=html if store_html else "",
+    )
 
 
 def extract_job_posting_from_json_ld(soup: BeautifulSoup) -> dict[str, Any]:

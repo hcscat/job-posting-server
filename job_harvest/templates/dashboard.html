@@ -3,9 +3,9 @@
 <section class="hero">
   <div>
     <p class="eyebrow">수집 서버 상태</p>
-    <h1>주기 수집과 검색 조건을 한 화면에서 제어합니다.</h1>
+    <h1>광범위 IT 채용 수집과 상세 정리 상태를 한 화면에서 봅니다.</h1>
     <p class="hero-copy">
-      현재 저장된 공고 {{ summary.total_postings }}건, 실행 기록 {{ summary.total_runs }}회입니다.
+      현재 저장된 IT 공고 {{ summary.total_postings }}건, 실행 기록 {{ summary.total_runs }}회입니다.
       {% if summary.is_collecting %}수집 작업이 진행 중입니다.{% else %}지금은 대기 상태입니다.{% endif %}
     </p>
   </div>
@@ -17,7 +17,7 @@
 
 <section class="card-grid">
   <article class="card stat">
-    <span class="label">저장 공고</span>
+    <span class="label">저장 IT 공고</span>
     <strong>{{ summary.total_postings }}</strong>
   </article>
   <article class="card stat">
@@ -25,8 +25,8 @@
     <strong>{{ summary.total_runs }}</strong>
   </article>
   <article class="card stat">
-    <span class="label">스케줄 상태</span>
-    <strong>{{ '활성' if settings.schedule_enabled else '비활성' }}</strong>
+    <span class="label">미정리 공고</span>
+    <strong>{{ summary.pending_enrichment }}</strong>
   </article>
   <article class="card stat">
     <span class="label">다음 실행 슬롯</span>
@@ -82,8 +82,10 @@
           <th>ID</th>
           <th>시작</th>
           <th>상태</th>
-          <th>트리거</th>
-          <th>저장 수</th>
+          <th>발견/관련</th>
+          <th>중복 스킵</th>
+          <th>AI 정리</th>
+          <th>원문 바이트</th>
           <th>메시지</th>
         </tr>
       </thead>
@@ -93,13 +95,15 @@
           <td>{{ run.id }}</td>
           <td>{{ run.started_at }}</td>
           <td><span class="pill {{ run.status }}">{{ run.status }}</span></td>
-          <td>{{ run.triggered_by }}</td>
-          <td>{{ run.saved_count }}</td>
+          <td>{{ run.unique_hit_count }} / {{ run.relevant_count }}</td>
+          <td>{{ run.duplicate_skip_count }}</td>
+          <td>{{ run.ai_enriched_count }}</td>
+          <td>{{ run.raw_bytes_written }}</td>
           <td>{{ run.message }}</td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="6" class="muted center">실행 기록이 없습니다.</td>
+          <td colspan="8" class="muted center">실행 기록이 없습니다.</td>
         </tr>
         {% endfor %}
       </tbody>

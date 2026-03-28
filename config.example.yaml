@@ -13,12 +13,22 @@ search:
     # - jobplanet
     # - rocketpunch
   queries: []
+  crawl_strategy: "broad_it_scan"
+  crawl_terms:
+    - "개발"
+    - "software engineer"
+    - "data engineer"
+  listing_page_limit: 0
   max_results_per_site: 8
   request_timeout_seconds: 20
   fetch_details: true
   store_html: false
+  detail_refetch_hours: 24
   concurrency: 4
   pause_between_searches_seconds: 1.0
+  ai_enrichment_enabled: false
+  ai_provider: "heuristic"
+  ai_model: ""
   user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
 
 criteria:

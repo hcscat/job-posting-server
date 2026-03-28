@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Iterable
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import requests
 
-from job_harvest.config import AppConfig, build_queries
+from job_harvest.ai_enrichment import HeuristicEnricher, apply_enrichment, build_enricher
+from job_harvest.config import AppConfig
+from job_harvest.crawler import discover_job_hits
 from job_harvest.extract import DetailFetchResult, fetch_job_details
 from job_harvest.models import JobPosting, SearchHit
-from job_harvest.search import dedupe_hits, pause_between_queries, search_site
-from job_harvest.sites import resolve_sites
+from job_harvest.raw_store import RawSnapshotStore
 from job_harvest.storage import persist_run
 
 
@@ -19,73 +21,99 @@ class CollectionExecution:
     queries: list[str]
     hits: list[SearchHit]
     deduped_hits: list[SearchHit]
+    skipped_existing_hits: list[SearchHit]
     detail_results: list[DetailFetchResult]
-    filtered_postings: list[JobPosting]
+    relevant_postings: list[JobPosting]
     html_by_url: dict[str, str]
+    listing_pages_fetched: int
+    listing_snapshot_count: int
+    detail_pages_fetched: int
+    duplicate_skip_count: int
+    raw_bytes_written: int
+    ai_enriched_count: int
 
 
 def run_collection(config: AppConfig) -> tuple[list[JobPosting], str]:
     execution = collect_postings(config)
     run_dir = persist_run(
         output_dir=config.output_dir,
-        postings=execution.filtered_postings,
+        postings=execution.relevant_postings,
         queries=execution.queries,
         config_source=config.config_source,
         store_html=config.search.store_html,
         html_by_url=execution.html_by_url,
     )
-    return execution.filtered_postings, str(run_dir)
+    return execution.relevant_postings, str(run_dir)
 
 
-def collect_postings(config: AppConfig) -> CollectionExecution:
-    queries = build_queries(config.criteria, config.search.queries)
-    sites = resolve_sites(config.search.sites)
+def collect_postings(
+    config: AppConfig,
+    *,
+    data_dir: str | Path | None = None,
+    existing_detail_fetches: dict[str, datetime | None] | None = None,
+) -> CollectionExecution:
+    raw_store = RawSnapshotStore(data_dir or config.output_dir.parent)
     session = requests.Session()
     session.headers.update({"User-Agent": config.search.user_agent})
 
-    hits: list[SearchHit] = []
-    for query in queries:
-        for site in sites:
-            try:
-                site_hits = search_site(
-                    session=session,
-                    site=site,
-                    base_query=query,
-                    max_results=config.search.max_results_per_site,
-                    timeout_seconds=config.search.request_timeout_seconds,
-                )
-            except Exception as exc:
-                print(f"[job_harvest] search failed for {site.key}: {exc}", flush=True)
-                site_hits = []
-            hits.extend(site_hits)
-            pause_between_queries(config.search.pause_between_searches_seconds)
+    discovery = discover_job_hits(config, session, raw_store)
+    hits_to_fetch, skipped_existing_hits = split_hits_for_detail_refresh(
+        discovery.deduped_hits,
+        existing_detail_fetches or {},
+        config.search.detail_refetch_hours,
+    )
+    detail_results = collect_details(config, session, hits_to_fetch, raw_store)
 
-    deduped_hits = dedupe_hits(hits)
-    detail_results = collect_details(config, session, deduped_hits)
-    postings = [result.posting for result in detail_results]
-    filtered = [posting for posting in postings if matches_criteria(posting, config)]
-    filtered_urls = {posting.normalized_url for posting in filtered}
+    enricher = build_enricher(config)
+    fallback_enricher = HeuristicEnricher()
+    ai_enriched_count = 0
+    for result in detail_results:
+        try:
+            enrichment = enricher.enrich(result.posting)
+            if enrichment.provider != "heuristic":
+                ai_enriched_count += 1
+        except Exception:
+            enrichment = fallback_enricher.enrich(result.posting)
+        apply_enrichment(result.posting, enrichment)
+
+    relevant_postings = [
+        result.posting
+        for result in detail_results
+        if is_relevant_posting(result.posting, config)
+    ]
     html_by_url = {
         result.posting.normalized_url: result.html
         for result in detail_results
-        if result.html and result.posting.normalized_url in filtered_urls
+        if result.html and result.posting.is_it_job
     }
+    raw_bytes_written = discovery.raw_bytes_written + sum(
+        result.detail_snapshot.byte_size
+        for result in detail_results
+        if result.detail_snapshot and result.detail_snapshot.newly_written
+    )
     return CollectionExecution(
-        queries=queries,
-        hits=hits,
-        deduped_hits=deduped_hits,
+        queries=discovery.queries,
+        hits=discovery.hits,
+        deduped_hits=discovery.deduped_hits,
+        skipped_existing_hits=skipped_existing_hits,
         detail_results=detail_results,
-        filtered_postings=filtered,
+        relevant_postings=relevant_postings,
         html_by_url=html_by_url,
+        listing_pages_fetched=discovery.listing_pages_fetched,
+        listing_snapshot_count=discovery.listing_snapshot_count,
+        detail_pages_fetched=len(detail_results),
+        duplicate_skip_count=len(skipped_existing_hits),
+        raw_bytes_written=raw_bytes_written,
+        ai_enriched_count=ai_enriched_count,
     )
 
 
 def collect_details(
     config: AppConfig,
     session: requests.Session,
-    hits: Iterable[SearchHit],
+    hits: list[SearchHit],
+    raw_store: RawSnapshotStore,
 ) -> list[DetailFetchResult]:
-    hit_list = list(hits)
     if not config.search.fetch_details:
         return [
             DetailFetchResult(
@@ -106,9 +134,10 @@ def collect_details(
                     education_level=hit.education_level,
                     title=hit.search_title,
                     summary=hit.snippet,
+                    listing_snapshot_sha256=hit.listing_snapshot_sha256,
                 )
             )
-            for hit in hit_list
+            for hit in hits
         ]
 
     results: list[DetailFetchResult] = []
@@ -120,12 +149,39 @@ def collect_details(
                 hit,
                 config.search.request_timeout_seconds,
                 config.search.store_html,
+                raw_store,
             )
-            for hit in hit_list
+            for hit in hits
         ]
         for future in as_completed(futures):
             results.append(future.result())
     return results
+
+
+def split_hits_for_detail_refresh(
+    hits: list[SearchHit],
+    existing_detail_fetches: dict[str, datetime | None],
+    detail_refetch_hours: int,
+) -> tuple[list[SearchHit], list[SearchHit]]:
+    if not existing_detail_fetches:
+        return hits, []
+
+    threshold = datetime.now(timezone.utc) - timedelta(hours=detail_refetch_hours)
+    to_fetch: list[SearchHit] = []
+    skipped: list[SearchHit] = []
+    for hit in hits:
+        last_detail_fetch = existing_detail_fetches.get(hit.normalized_url)
+        if last_detail_fetch is not None and last_detail_fetch >= threshold:
+            skipped.append(hit)
+            continue
+        to_fetch.append(hit)
+    return to_fetch, skipped
+
+
+def is_relevant_posting(posting: JobPosting, config: AppConfig) -> bool:
+    if config.search.crawl_strategy == "broad_it_scan":
+        return posting.is_it_job
+    return posting.is_it_job and matches_criteria(posting, config)
 
 
 def matches_criteria(posting: JobPosting, config: AppConfig) -> bool:
@@ -142,6 +198,14 @@ def matches_criteria(posting: JobPosting, config: AppConfig) -> bool:
             posting.education_level,
             posting.summary,
             posting.description,
+            posting.ai_summary,
+            posting.ai_relevance_reason,
+            posting.ai_job_family,
+            " ".join(posting.tags),
+            " ".join(posting.ai_tech_stack),
+            " ".join(posting.ai_requirements),
+            " ".join(posting.ai_responsibilities),
+            " ".join(posting.ai_benefits),
         ]
     ).casefold()
 
