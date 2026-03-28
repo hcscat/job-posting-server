@@ -18,6 +18,7 @@ from job_harvest.raw_store import RawSnapshotStore, SnapshotRef
 
 TAG_RE = re.compile(r"<[^>]+>")
 JOBPLANET_POSTING_ID_RE = re.compile(r"(?:job_postings/|posting_ids%5B%5D=|posting_ids\[])(\d+)")
+ROCKETPUNCH_JOB_ID_RE = re.compile(r"(?:jobId=|/jobs/)(\d+)")
 DETAIL_HINTS = (
     "주요업무",
     "자격요건",
@@ -47,9 +48,6 @@ def fetch_job_details(
     hit: SearchHit,
     raw_store: RawSnapshotStore | None = None,
 ) -> DetailFetchResult:
-    if hit.site_key == "rocketpunch" and "jobId=" in hit.url:
-        return build_listing_only_result(hit, extraction_method="rocketpunch-listing-api", status_code=200)
-
     posting = init_posting_from_hit(hit)
     try:
         response = requests.get(hit.url, headers=headers, timeout=search_config.request_timeout_seconds)
@@ -150,6 +148,64 @@ def collect_rendered_details_with_browser(
                     status_code=status_code,
                 )
             )
+    return results
+
+
+def collect_rocketpunch_details_with_browser(
+    search_config: SearchConfig,
+    hits: list[SearchHit],
+    raw_store: RawSnapshotStore | None = None,
+) -> list[DetailFetchResult]:
+    if not hits:
+        return []
+    if not search_config.browser_enabled or not browser_runtime_available():
+        return [build_listing_only_result(hit, extraction_method="rocketpunch-listing-only", status_code=200) for hit in hits]
+
+    results: list[DetailFetchResult] = []
+    with BrowserSession(
+        user_agent=search_config.user_agent,
+        headless=search_config.browser_headless,
+        timeout_seconds=search_config.browser_timeout_seconds,
+    ) as browser:
+        browser.goto_html("https://www.rocketpunch.com/jobs", wait_ms=3000)
+        for hit in hits:
+            posting = init_posting_from_hit(hit)
+            job_id = extract_rocketpunch_job_id(hit.url) or extract_rocketpunch_job_id(hit.normalized_url)
+            if not job_id:
+                results.append(build_listing_only_result(hit, extraction_method="rocketpunch-listing-only", status_code=200))
+                continue
+            api_url = f"https://www.rocketpunch.com/api/proxy/jobs/{job_id}"
+            try:
+                body = browser.fetch_text(
+                    api_url,
+                    init={
+                        "headers": {
+                            "accept": "application/json, text/plain, */*",
+                            "x-requested-with": "XMLHttpRequest",
+                        },
+                        "referrer": "https://www.rocketpunch.com/jobs",
+                    },
+                )
+                payload = json.loads(body)
+            except Exception:
+                results.append(build_listing_only_result(hit, extraction_method="rocketpunch-listing-only", status_code=200))
+                continue
+            if payload.get("code") and not payload.get("title"):
+                results.append(build_listing_only_result(hit, extraction_method="rocketpunch-listing-only", status_code=200))
+                continue
+            detail_snapshot = None
+            if raw_store is not None:
+                detail_snapshot = raw_store.store_text(
+                    category="detail",
+                    url=api_url,
+                    text=body,
+                    content_type="application/json; charset=utf-8",
+                )
+                posting.detail_snapshot_sha256 = detail_snapshot.sha256_hex
+            apply_rocketpunch_detail_payload(posting, payload)
+            posting.status_code = 200
+            posting.detail_fetched_at = datetime.now(timezone.utc).isoformat()
+            results.append(DetailFetchResult(posting=posting, detail_snapshot=detail_snapshot))
     return results
 
 
@@ -269,6 +325,11 @@ def extract_jobplanet_posting_id(url: str) -> str | None:
     return match.group(1) if match else None
 
 
+def extract_rocketpunch_job_id(url: str) -> str | None:
+    match = ROCKETPUNCH_JOB_ID_RE.search(url)
+    return match.group(1) if match else None
+
+
 def compose_jobplanet_description(payload: dict[str, Any]) -> str:
     sections: list[str] = []
     for label, value in (
@@ -286,6 +347,72 @@ def compose_jobplanet_description(payload: dict[str, Any]) -> str:
         if text:
             sections.append(f"{label}\n{text}")
     return "\n\n".join(sections)
+
+
+def apply_rocketpunch_detail_payload(posting: JobPosting, payload: dict[str, Any]) -> None:
+    posting.title = collapse_whitespace(str(payload.get("title") or posting.search_title or ""))
+    posting.page_title = posting.title
+    posting.company = collapse_whitespace(str(payload.get("companyName") or posting.company or ""))
+    posting.location = _join_values(payload.get("locations")) or collapse_whitespace(str(payload.get("location") or posting.location or ""))
+    posting.employment_type = collapse_whitespace(str(payload.get("workType") or posting.employment_type or ""))
+    posting.experience_level = _join_values(payload.get("seniorities")) or posting.experience_level
+    posting.date_posted = collapse_whitespace(str(payload.get("createdAt") or payload.get("postedAt") or ""))
+    posting.valid_through = collapse_whitespace(str(payload.get("expiresAt") or ""))
+    posting.summary = collapse_whitespace(str(payload.get("shortDescription") or "")) or posting.search_snippet
+    posting.description = compose_rocketpunch_description(payload)
+    posting.extraction_method = "rocketpunch-api"
+    posting.tags = _extract_rocketpunch_tags(payload)
+    if not posting.description:
+        posting.description = posting.summary
+    if not posting.summary:
+        posting.summary = summarize_excerpt(posting.description)
+
+
+def compose_rocketpunch_description(payload: dict[str, Any]) -> str:
+    sections: list[str] = []
+    for label, value in (
+        ("Description", payload.get("description")),
+        ("Primary Responsibilities", payload.get("primaryResponsibilities")),
+        ("Requirements", payload.get("requirements")),
+        ("Preferred", payload.get("preferredQualifications")),
+        ("Benefits", payload.get("benefits")),
+        ("Tech Stack", payload.get("techStack")),
+        ("Locations", payload.get("locations")),
+    ):
+        text = _coerce_section_text(value)
+        if text:
+            sections.append(f"{label}\n{text}")
+    return "\n\n".join(sections)
+
+
+def _extract_rocketpunch_tags(payload: dict[str, Any]) -> list[str]:
+    tags: list[str] = []
+    for value in (
+        payload.get("jobCategories"),
+        payload.get("skills"),
+        payload.get("seniorities"),
+        payload.get("techStack"),
+    ):
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    text = collapse_whitespace(
+                        str(
+                            item.get("name")
+                            or item.get("title")
+                            or item.get("value")
+                            or ""
+                        )
+                    )
+                else:
+                    text = collapse_whitespace(str(item))
+                if text:
+                    tags.append(text)
+        elif value:
+            text = collapse_whitespace(str(value))
+            if text:
+                tags.append(text)
+    return list(dict.fromkeys(tags))
 
 
 def _extract_jobplanet_tags(payload: dict[str, Any]) -> list[str]:

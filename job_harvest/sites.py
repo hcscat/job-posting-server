@@ -4,15 +4,15 @@ from job_harvest.models import SiteDefinition
 
 
 DEFAULT_SITES: dict[str, SiteDefinition] = {
-    "saramin": SiteDefinition("saramin", "사람인", "saramin.co.kr"),
-    "jobkorea": SiteDefinition("jobkorea", "잡코리아", "jobkorea.co.kr"),
+    "saramin": SiteDefinition("saramin", "Saramin", "saramin.co.kr"),
+    "jobkorea": SiteDefinition("jobkorea", "JobKorea", "jobkorea.co.kr"),
     "linkedin": SiteDefinition("linkedin", "LinkedIn", "linkedin.com"),
-    "jobplanet": SiteDefinition("jobplanet", "잡플래닛", "jobplanet.co.kr"),
-    "jumpit": SiteDefinition("jumpit", "점핏", "jumpit.saramin.co.kr"),
-    "wanted": SiteDefinition("wanted", "원티드", "wanted.co.kr"),
-    "rocketpunch": SiteDefinition("rocketpunch", "로켓펀치", "rocketpunch.com"),
-    "remember": SiteDefinition("remember", "리멤버", "rememberapp.co.kr"),
-    "blind": SiteDefinition("blind", "블라인드", "teamblind.com"),
+    "jobplanet": SiteDefinition("jobplanet", "JobPlanet", "jobplanet.co.kr"),
+    "jumpit": SiteDefinition("jumpit", "Jumpit", "jumpit.saramin.co.kr"),
+    "wanted": SiteDefinition("wanted", "Wanted", "wanted.co.kr"),
+    "rocketpunch": SiteDefinition("rocketpunch", "RocketPunch", "rocketpunch.com"),
+    "remember": SiteDefinition("remember", "Remember", "rememberapp.co.kr"),
+    "blind": SiteDefinition("blind", "Blind", "teamblind.com"),
 }
 
 STABLE_SITE_KEYS = {

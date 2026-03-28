@@ -13,7 +13,7 @@ from job_harvest.crawler import discover_job_hits
 from job_harvest.extract import (
     DetailFetchResult,
     collect_jobplanet_details_with_browser,
-    collect_rendered_details_with_browser,
+    collect_rocketpunch_details_with_browser,
     fetch_job_details,
 )
 from job_harvest.models import JobPosting, SearchHit
@@ -171,14 +171,14 @@ def collect_details(
     headers = dict(session.headers)
     results: list[DetailFetchResult] = []
     jobplanet_hits: list[SearchHit] = []
-    blind_hits: list[SearchHit] = []
+    rocketpunch_hits: list[SearchHit] = []
     regular_hits: list[SearchHit] = []
 
     for hit in hits:
         if hit.site_key == "jobplanet":
             jobplanet_hits.append(hit)
-        elif hit.site_key == "blind":
-            blind_hits.append(hit)
+        elif hit.site_key == "rocketpunch":
+            rocketpunch_hits.append(hit)
         else:
             regular_hits.append(hit)
 
@@ -190,13 +190,12 @@ def collect_details(
         )
     )
     results.extend(
-        collect_rendered_details_with_browser(
+        collect_rocketpunch_details_with_browser(
             search_config=config.search,
-            hits=blind_hits,
+            hits=rocketpunch_hits,
             raw_store=raw_store,
         )
     )
-
     if not regular_hits:
         return results
 
@@ -229,6 +228,8 @@ def split_hits_for_detail_refresh(
     skipped: list[SearchHit] = []
     for hit in hits:
         last_detail_fetch = existing_detail_fetches.get(hit.normalized_url)
+        if last_detail_fetch is not None and last_detail_fetch.tzinfo is None:
+            last_detail_fetch = last_detail_fetch.replace(tzinfo=timezone.utc)
         if last_detail_fetch is not None and last_detail_fetch >= threshold:
             skipped.append(hit)
             continue

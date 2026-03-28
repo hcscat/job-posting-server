@@ -7,23 +7,42 @@ from typing import Any
 import yaml
 
 
-DEFAULT_SITE_KEYS = ["saramin", "jobkorea", "linkedin"]
+DEFAULT_SITE_KEYS = [
+    "saramin",
+    "jobkorea",
+    "linkedin",
+    "wanted",
+    "jumpit",
+    "remember",
+    "jobplanet",
+    "rocketpunch",
+    "blind",
+]
 DEFAULT_EXTRA_TERMS = ["채용", "공고"]
 DEFAULT_IT_CRAWL_TERMS = [
     "개발",
-    "웹 개발",
-    "앱 개발",
-    "데이터",
+    "백엔드",
+    "프론트엔드",
+    "풀스택",
+    "데이터 엔지니어",
+    "데이터 사이언티스트",
+    "머신러닝",
+    "AI 엔지니어",
+    "플랫폼 엔지니어",
+    "QA",
     "보안",
-    "클라우드",
+    "iOS",
+    "Android",
     "frontend",
     "backend",
     "fullstack",
-    "소프트웨어 엔지니어",
     "software engineer",
-    "DevOps",
     "data engineer",
+    "data scientist",
     "machine learning",
+    "devops",
+    "platform engineer",
+    "security engineer",
 ]
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

@@ -2,6 +2,7 @@ import json
 import unittest
 
 from job_harvest.browser_collectors import (
+    parse_blind_job_cards,
     parse_blind_anchor_rows,
     parse_jobplanet_jobs_payload,
     parse_rocketpunch_jobs_payload,
@@ -64,13 +65,14 @@ class BrowserCollectorsTest(unittest.TestCase):
             }
         )
 
-        hits, total_pages = parse_rocketpunch_jobs_payload(
+        hits, total_pages, next_page_token = parse_rocketpunch_jobs_payload(
             body=body,
             source_query="data engineer",
             discovered_at="2026-03-20T00:00:00+00:00",
         )
         self.assertEqual(len(hits), 1)
         self.assertEqual(total_pages, 2)
+        self.assertIsNone(next_page_token)
         self.assertEqual(hits[0].site_key, "rocketpunch")
         self.assertIn("jobId=158375", hits[0].url)
         self.assertEqual(hits[0].company, "Rocket Data")
@@ -92,6 +94,28 @@ class BrowserCollectorsTest(unittest.TestCase):
         self.assertEqual(hits[0].site_key, "blind")
         self.assertEqual(hits[0].search_title, "Frontend Engineer")
         self.assertEqual(hits[0].company, "Example Corp")
+        self.assertEqual(hits[0].location, "Seoul, KR")
+
+    def test_parse_blind_job_cards(self) -> None:
+        hits = parse_blind_job_cards(
+            rows=[
+                {
+                    "href": "https://www.teamblind.com/jobs/305253011",
+                    "title": "Backend Engineer",
+                    "company": "Acme",
+                    "location": "Seoul, KR",
+                    "metadata": "3w ago · Recruiting on Blind",
+                    "text": "Backend Engineer\nAcme\nSeoul, KR",
+                }
+            ],
+            source_query="backend",
+            discovered_at="2026-03-20T00:00:00+00:00",
+        )
+
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0].site_key, "blind")
+        self.assertEqual(hits[0].search_title, "Backend Engineer")
+        self.assertEqual(hits[0].company, "Acme")
         self.assertEqual(hits[0].location, "Seoul, KR")
 
 

@@ -72,11 +72,14 @@ class BrowserSession:
         status_code = response.status if response is not None else 0
         return self.page.content(), status_code
 
-    def fetch_text(self, url: str) -> str:
+    def fetch_text(self, url: str, init: dict[str, object] | None = None) -> str:
         return self.page.evaluate(
-            """async (targetUrl) => {
-                const response = await fetch(targetUrl, { credentials: "include" });
+            """async ({ targetUrl, options }) => {
+                const response = await fetch(targetUrl, {
+                    credentials: "include",
+                    ...(options || {}),
+                });
                 return await response.text();
             }""",
-            url,
+            {"targetUrl": url, "options": init or {}},
         )

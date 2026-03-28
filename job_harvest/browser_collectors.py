@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from math import ceil
 from urllib.parse import parse_qsl, quote, urlencode, urljoin, urlparse, urlunparse
@@ -13,6 +14,27 @@ from job_harvest.search import collapse_whitespace, normalize_url
 
 
 BROWSER_SITE_KEYS = {"jobplanet", "rocketpunch", "blind"}
+JOBPLANET_BROAD_OCCUPATION_GROUPS = (
+    ("jobplanet:development", {"occupation_level1": "11600"}),
+    ("jobplanet:data", {"occupation_level1": "11912"}),
+)
+ROCKETPUNCH_FETCH_INIT = {
+    "headers": {
+        "accept": "application/json, text/plain, */*",
+        "x-requested-with": "XMLHttpRequest",
+    },
+    "referrer": "https://www.rocketpunch.com/jobs",
+}
+BLIND_BROAD_TERMS = (
+    "software engineer",
+    "frontend",
+    "backend",
+    "fullstack",
+    "data engineer",
+    "data scientist",
+    "machine learning",
+    "devops",
+)
 
 
 @dataclass
@@ -36,7 +58,7 @@ def discover_site_hits_with_browser(
     if site.key == "jobplanet":
         return discover_jobplanet_hits(config=config, raw_store=raw_store, site=site, terms=terms)
     if site.key == "rocketpunch":
-        return discover_rocketpunch_hits(config=config, raw_store=raw_store, site=site)
+        return discover_rocketpunch_hits(config=config, raw_store=raw_store, site=site, terms=terms)
     if site.key == "blind":
         return discover_blind_hits(config=config, raw_store=raw_store, site=site, terms=terms)
     return BrowserDiscoveryExecution(hits=[])
@@ -49,7 +71,6 @@ def discover_jobplanet_hits(
     site: SiteDefinition,
     terms: list[str],
 ) -> BrowserDiscoveryExecution:
-    selected_terms = terms if config.search.crawl_strategy == "query_search" and terms else (terms[:1] or ["developer"])
     hits: list[SearchHit] = []
     listing_pages_fetched = 0
     listing_snapshot_count = 0
@@ -60,35 +81,28 @@ def discover_jobplanet_hits(
         headless=config.search.browser_headless,
         timeout_seconds=config.search.browser_timeout_seconds,
     ) as browser:
-        for term in selected_terms:
+        html, _ = browser.goto_html("https://www.jobplanet.co.kr/job", wait_ms=3500)
+        snap_count, snap_bytes = _store_listing_snapshot(
+            raw_store,
+            "https://www.jobplanet.co.kr/job",
+            html,
+            "text/html; charset=utf-8",
+        )
+        listing_pages_fetched += 1
+        listing_snapshot_count += snap_count
+        raw_bytes_written += snap_bytes
+
+        requests_to_run = build_jobplanet_requests(config, terms)
+        for source_query, base_api_url in requests_to_run:
             discovered_at = _now_iso()
-            search_url = f"https://www.jobplanet.co.kr/job/search?query={quote(term)}"
-            api_urls: list[str] = []
-
-            def handle_response(response) -> None:
-                if "/api/v3/job/search" in response.url and response.status == 200 and response.url not in api_urls:
-                    api_urls.append(response.url)
-
-            browser.page.on("response", handle_response)
-            html, _ = browser.goto_html(search_url, wait_ms=5000)
-            snap_count, snap_bytes = _store_listing_snapshot(raw_store, search_url, html, "text/html; charset=utf-8")
-            listing_pages_fetched += 1
-            listing_snapshot_count += snap_count
-            raw_bytes_written += snap_bytes
-
-            if not api_urls:
-                browser.page.remove_listener("response", handle_response)
-                continue
-
-            first_api_url = _replace_query_params(api_urls[0], {"page": "1", "page_size": "50"})
             page_number = 1
             max_pages = config.search.listing_page_limit or None
             while True:
-                page_url = _replace_query_params(first_api_url, {"page": str(page_number)})
+                page_url = _replace_query_params(base_api_url, {"page": str(page_number)})
                 body = browser.fetch_text(page_url)
                 page_hits, total_pages = parse_jobplanet_jobs_payload(
                     body=body,
-                    source_query=term,
+                    source_query=source_query,
                     discovered_at=discovered_at,
                 )
                 snap_count, snap_bytes = _store_listing_snapshot(
@@ -110,7 +124,6 @@ def discover_jobplanet_hits(
                 if total_pages is not None and page_number >= total_pages:
                     break
                 page_number += 1
-            browser.page.remove_listener("response", handle_response)
 
     return BrowserDiscoveryExecution(
         hits=hits,
@@ -125,12 +138,13 @@ def discover_rocketpunch_hits(
     config: AppConfig,
     raw_store: RawSnapshotStore,
     site: SiteDefinition,
+    terms: list[str],
 ) -> BrowserDiscoveryExecution:
     hits: list[SearchHit] = []
     listing_pages_fetched = 0
     listing_snapshot_count = 0
     raw_bytes_written = 0
-    discovered_at = _now_iso()
+    seen_urls: set[str] = set()
 
     with BrowserSession(
         user_agent=config.search.user_agent,
@@ -143,38 +157,51 @@ def discover_rocketpunch_hits(
         listing_snapshot_count += snap_count
         raw_bytes_written += snap_bytes
 
-        first_url = "https://www.rocketpunch.com/api/proxy/jobs?sort=DATE_DESC"
-        page_number = 1
-        max_pages = config.search.listing_page_limit or None
-        while True:
-            api_url = first_url if page_number == 1 else f"{first_url}&page={page_number}"
-            body = browser.fetch_text(api_url)
-            page_hits, total_pages = parse_rocketpunch_jobs_payload(
-                body=body,
-                source_query="__browser_all__",
-                discovered_at=discovered_at,
-            )
-            if page_number > 1 and not page_hits:
-                break
-            snap_count, snap_bytes = _store_listing_snapshot(
-                raw_store,
-                api_url,
-                body,
-                "application/json; charset=utf-8",
-                hits=page_hits,
-            )
-            listing_pages_fetched += 1
-            listing_snapshot_count += snap_count
-            raw_bytes_written += snap_bytes
-            hits.extend(page_hits)
+        for source_query, keyword in build_rocketpunch_queries(config, terms):
+            discovered_at = _now_iso()
+            page_token = ""
+            page_number = 1
+            max_pages = config.search.listing_page_limit or None
+            while True:
+                params = {"sort": "DATE_DESC"}
+                if keyword:
+                    params["keyword"] = keyword
+                if page_token:
+                    params["pageToken"] = page_token
+                api_url = _replace_query_params("https://www.rocketpunch.com/api/proxy/jobs", params)
+                body = browser.fetch_text(api_url, init=ROCKETPUNCH_FETCH_INIT)
+                page_hits, total_pages, next_page_token = parse_rocketpunch_jobs_payload(
+                    body=body,
+                    source_query=source_query,
+                    discovered_at=discovered_at,
+                )
+                if page_number > 1 and not page_hits:
+                    break
+                page_hits = [hit for hit in page_hits if hit.normalized_url not in seen_urls]
+                snap_count, snap_bytes = _store_listing_snapshot(
+                    raw_store,
+                    api_url,
+                    body,
+                    "application/json; charset=utf-8",
+                    hits=page_hits,
+                )
+                listing_pages_fetched += 1
+                listing_snapshot_count += snap_count
+                raw_bytes_written += snap_bytes
+                for hit in page_hits:
+                    seen_urls.add(hit.normalized_url)
+                hits.extend(page_hits)
 
-            if max_pages is not None and page_number >= max_pages:
-                break
-            if total_pages is not None and page_number >= total_pages:
-                break
-            if page_number >= 2 and not page_hits:
-                break
-            page_number += 1
+                if not page_hits:
+                    break
+                if max_pages is not None and page_number >= max_pages:
+                    break
+                if total_pages is not None and page_number >= total_pages:
+                    break
+                if not next_page_token or next_page_token == page_token:
+                    break
+                page_token = next_page_token
+                page_number += 1
 
     return BrowserDiscoveryExecution(
         hits=hits,
@@ -195,12 +222,9 @@ def discover_blind_hits(
     listing_pages_fetched = 0
     listing_snapshot_count = 0
     raw_bytes_written = 0
-    discovered_at = _now_iso()
-    rounds = config.search.listing_page_limit or 25
-    wait_ms = max(int(config.search.pause_between_searches_seconds * 1000), 1500)
-    term_filters = [term.casefold() for term in terms] if config.search.crawl_strategy == "query_search" else []
+    rounds = config.search.listing_page_limit or 6
+    wait_ms = max(int(config.search.pause_between_searches_seconds * 1000), 2000)
     seen_urls: set[str] = set()
-    stagnant_rounds = 0
 
     with BrowserSession(
         user_agent=config.search.user_agent,
@@ -213,43 +237,53 @@ def discover_blind_hits(
         listing_snapshot_count += snap_count
         raw_bytes_written += snap_bytes
 
-        for round_index in range(rounds):
-            rows = browser.page.eval_on_selector_all(
-                'a[href*="/jobs/"]',
-                """(elements) => elements.map((element) => ({
-                    href: element.href,
-                    text: (element.innerText || element.textContent || "").trim()
-                }))""",
-            )
-            page_hits = parse_blind_anchor_rows(
-                rows=rows,
-                source_query="__browser_all__",
-                discovered_at=discovered_at,
-                term_filters=term_filters,
-            )
-            before = len(seen_urls)
-            for hit in page_hits:
-                if hit.normalized_url in seen_urls:
-                    continue
-                seen_urls.add(hit.normalized_url)
-                hits.append(hit)
-            if len(seen_urls) == before:
-                stagnant_rounds += 1
-            else:
-                stagnant_rounds = 0
-            if stagnant_rounds >= 3:
-                break
-            browser.page.mouse.wheel(0, 9000)
-            browser.page.wait_for_timeout(wait_ms)
-            html = browser.page.content()
-            snap_count, snap_bytes = _store_listing_snapshot(
-                raw_store,
-                f"https://www.teamblind.com/jobs#round={round_index + 1}",
-                html,
-            )
-            listing_pages_fetched += 1
-            listing_snapshot_count += snap_count
-            raw_bytes_written += snap_bytes
+        for source_query, search_term in build_blind_queries(config, terms):
+            discovered_at = _now_iso()
+            for page_number in range(1, rounds + 1):
+                page_url = (
+                    "https://www.teamblind.com/jobs"
+                    f"?searchKeyword={quote(search_term)}&page={page_number}"
+                )
+                html, _ = browser.goto_html(page_url, wait_ms=wait_ms)
+                rows = browser.page.eval_on_selector_all(
+                    'a[href^="/jobs/"]',
+                    """(elements) => elements.map((element) => {
+                        const titleNode = element.querySelector('[data-testid="job-preview-title"]');
+                        const locationNode = element.querySelector('[data-testid="job-preview-location"]');
+                        const metadataNode = element.querySelector('[data-testid="job-preview-metadata"]');
+                        const companyNode = metadataNode ? metadataNode.querySelector('[data-testid="company-name"]') : null;
+                        return {
+                            href: element.href,
+                            text: (element.innerText || element.textContent || "").trim(),
+                            title: titleNode ? (titleNode.innerText || titleNode.textContent || "").trim() : "",
+                            company: companyNode ? (companyNode.innerText || companyNode.textContent || "").trim() : "",
+                            location: locationNode ? (locationNode.innerText || locationNode.textContent || "").trim() : "",
+                            metadata: metadataNode ? (metadataNode.innerText || metadataNode.textContent || "").trim() : ""
+                        };
+                    })""",
+                )
+                page_hits = parse_blind_job_cards(
+                    rows=rows,
+                    source_query=source_query,
+                    discovered_at=discovered_at,
+                )
+                new_hits = [hit for hit in page_hits if hit.normalized_url not in seen_urls]
+                snap_count, snap_bytes = _store_listing_snapshot(
+                    raw_store,
+                    page_url,
+                    html,
+                    hits=new_hits,
+                )
+                listing_pages_fetched += 1
+                listing_snapshot_count += snap_count
+                raw_bytes_written += snap_bytes
+                for hit in new_hits:
+                    seen_urls.add(hit.normalized_url)
+                hits.extend(new_hits)
+                if not page_hits:
+                    break
+                if new_hits and (len(new_hits) / max(len(page_hits), 1)) < 0.7:
+                    break
 
     return BrowserDiscoveryExecution(
         hits=hits,
@@ -326,11 +360,14 @@ def parse_rocketpunch_jobs_payload(
     body: str,
     source_query: str,
     discovered_at: str,
-) -> tuple[list[SearchHit], int | None]:
+) -> tuple[list[SearchHit], int | None, str | None]:
     payload = json.loads(body)
+    if payload.get("code") and not payload.get("items"):
+        return [], None, None
     items = list(payload.get("items") or [])
     total_items = int(payload.get("totalItems") or 0)
     item_size = int(payload.get("itemSize") or len(items) or 20)
+    page_token = collapse_whitespace(str(payload.get("pageToken") or ""))
     hits: list[SearchHit] = []
     for item in items:
         job_id = item.get("jobId")
@@ -356,7 +393,7 @@ def parse_rocketpunch_jobs_payload(
             )
         )
     total_pages = ceil(total_items / item_size) if total_items and item_size else None
-    return hits, total_pages
+    return hits, total_pages, page_token or None
 
 
 def parse_blind_anchor_rows(
@@ -396,6 +433,121 @@ def parse_blind_anchor_rows(
             )
         )
     return hits
+
+
+def parse_blind_job_cards(
+    *,
+    rows: list[dict[str, str]],
+    source_query: str,
+    discovered_at: str,
+) -> list[SearchHit]:
+    hits: list[SearchHit] = []
+    for row in rows:
+        href = collapse_whitespace(row.get("href", ""))
+        if not href:
+            continue
+        title = collapse_whitespace(row.get("title", ""))
+        metadata = collapse_whitespace(row.get("metadata", ""))
+        location = collapse_whitespace(row.get("location", ""))
+        company = collapse_whitespace(row.get("company", ""))
+        fallback_text = collapse_whitespace(row.get("text", ""))
+        if not title and fallback_text:
+            title = fallback_text.split("\n", 1)[0]
+        if not title:
+            continue
+        hits.append(
+            SearchHit(
+                site_key="blind",
+                site_name="Blind",
+                source_query=source_query,
+                discovered_at=discovered_at,
+                search_title=title,
+                url=href,
+                normalized_url=normalize_url(href),
+                snippet=" | ".join(part for part in [company, location, metadata] if part),
+                company=company,
+                location=location,
+            )
+        )
+    return hits
+
+
+def build_jobplanet_requests(config: AppConfig, terms: list[str]) -> list[tuple[str, str]]:
+    if config.search.crawl_strategy == "query_search" and terms:
+        requests_to_run: list[tuple[str, str]] = []
+        for term in terms:
+            requests_to_run.append(
+                (
+                    term,
+                    _replace_query_params(
+                        "https://www.jobplanet.co.kr/api/v3/job/search",
+                        {
+                            "query": term,
+                            "page": "1",
+                            "page_size": "1000",
+                        },
+                    ),
+                )
+            )
+        return requests_to_run
+
+    requests_to_run = []
+    for source_query, params in JOBPLANET_BROAD_OCCUPATION_GROUPS:
+        requests_to_run.append(
+            (
+                source_query,
+                _replace_query_params(
+                    "https://www.jobplanet.co.kr/api/v3/job/postings",
+                    {
+                        **params,
+                        "order_by": "recent",
+                        "page": "1",
+                        "page_size": "1000",
+                    },
+                ),
+            )
+        )
+    return requests_to_run
+
+
+def build_rocketpunch_queries(
+    config: AppConfig,
+    terms: list[str],
+) -> list[tuple[str, str]]:
+    if config.search.crawl_strategy == "query_search":
+        return [(term, term) for term in dedupe_terms(terms)]
+
+    queries: list[tuple[str, str]] = [("__browser_all__", "")]
+    for term in dedupe_terms(terms):
+        queries.append((term, term))
+    return queries
+
+
+def build_blind_queries(
+    config: AppConfig,
+    terms: list[str],
+) -> list[tuple[str, str]]:
+    if config.search.crawl_strategy == "query_search":
+        base_terms = dedupe_terms(terms)
+    else:
+        preferred = list(BLIND_BROAD_TERMS)
+        base_terms = dedupe_terms(preferred + list(terms))
+    return [(term, term) for term in base_terms]
+
+
+def dedupe_terms(values: Iterable[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for value in values:
+        cleaned = collapse_whitespace(value)
+        if not cleaned:
+            continue
+        marker = cleaned.casefold()
+        if marker in seen:
+            continue
+        seen.add(marker)
+        unique.append(cleaned)
+    return unique
 
 
 def _replace_query_params(url: str, updates: dict[str, str]) -> str:
