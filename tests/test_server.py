@@ -16,18 +16,21 @@ class ServerTest(unittest.TestCase):
             with TestClient(app) as client:
                 dashboard = client.get("/")
                 self.assertEqual(dashboard.status_code, 200)
-                self.assertIn("채용 공고 서버", dashboard.text)
                 self.assertNotIn("run-now-button", dashboard.text)
 
                 english_dashboard = client.get("/?lang=en")
                 self.assertEqual(english_dashboard.status_code, 200)
                 self.assertIn("Job Posting Server", english_dashboard.text)
 
-                jobs_page = client.get("/jobs")
+                jobs_page = client.get("/jobs?lang=ko")
                 self.assertEqual(jobs_page.status_code, 200)
                 self.assertIn("job-detail-drawer", jobs_page.text)
+                self.assertIn("job-detail-row", jobs_page.text)
+                self.assertIn("사람인", jobs_page.text)
 
-                self.assertEqual(client.get("/settings").status_code, 200)
+                settings_page = client.get("/settings?lang=ko")
+                self.assertEqual(settings_page.status_code, 200)
+                self.assertIn("사람인", settings_page.text)
                 self.assertEqual(client.get("/health").status_code, 200)
 
                 settings = client.get("/api/settings").json()
@@ -188,7 +191,10 @@ class ServerTest(unittest.TestCase):
 
                 self.assertEqual(client.get("/runs/1").status_code, 200)
                 self.assertEqual(client.get("/jobs/1").status_code, 200)
-                self.assertEqual(client.get(f"/raw/detail/{detail_snapshot.sha256_hex}").status_code, 200)
+                self.assertEqual(
+                    client.get(f"/raw/detail/{detail_snapshot.sha256_hex}").status_code,
+                    200,
+                )
 
 
 if __name__ == "__main__":

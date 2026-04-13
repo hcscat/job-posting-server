@@ -6,7 +6,7 @@
   <title>{{ title }} | {{ tr('common.app_title') }}</title>
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
 </head>
-<body data-locale="{{ locale }}" data-messages='{{ ui_messages_json | safe }}'>
+<body data-locale="{{ locale }}" data-messages='{{ ui_messages_json | safe }}' data-site-labels='{{ site_labels_json | safe }}'>
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">

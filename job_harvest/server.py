@@ -40,6 +40,59 @@ from job_harvest.sites import BEST_EFFORT_SITE_KEYS, DEFAULT_SITES
 
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).with_name("templates")))
+SITE_LABELS = {
+    "ko": {
+        "saramin": "사람인",
+        "jobkorea": "잡코리아",
+        "linkedin": "링크드인",
+        "wanted": "원티드",
+        "jumpit": "점핏",
+        "remember": "리멤버",
+        "jobplanet": "잡플래닛",
+        "rocketpunch": "로켓펀치",
+        "blind": "블라인드",
+    },
+    "en": {
+        "saramin": "Saramin",
+        "jobkorea": "JobKorea",
+        "linkedin": "LinkedIn",
+        "wanted": "Wanted",
+        "jumpit": "Jumpit",
+        "remember": "Remember",
+        "jobplanet": "JobPlanet",
+        "rocketpunch": "RocketPunch",
+        "blind": "Blind",
+    },
+}
+
+SITE_LABELS = {
+    "ko": {
+        "saramin": "\uc0ac\ub78c\uc778",
+        "jobkorea": "\uc7a1\ucf54\ub9ac\uc544",
+        "linkedin": "\ub9c1\ud06c\ub4dc\uc778",
+        "wanted": "\uc6d0\ud2f0\ub4dc",
+        "jumpit": "\uc810\ud54f",
+        "remember": "\ub9ac\uba64\ubc84",
+        "jobplanet": "\uc7a1\ud50c\ub798\ub2db",
+        "rocketpunch": "\ub85c\ucf13\ud380\uce58",
+        "blind": "\ube14\ub77c\uc778\ub4dc",
+    },
+    "en": {
+        "saramin": "Saramin",
+        "jobkorea": "JobKorea",
+        "linkedin": "LinkedIn",
+        "wanted": "Wanted",
+        "jumpit": "Jumpit",
+        "remember": "Remember",
+        "jobplanet": "JobPlanet",
+        "rocketpunch": "RocketPunch",
+        "blind": "Blind",
+    },
+}
+
+
+def translate_site_label(locale: str, site_key: str, fallback: str = "") -> str:
+    return SITE_LABELS.get(locale, SITE_LABELS["en"]).get(site_key, fallback or site_key)
 
 
 def _template_response(
@@ -55,6 +108,9 @@ def _template_response(
     def tr(key: str, **kwargs) -> str:
         return translate(locale, key, **kwargs)
 
+    def site_label(site_key: str, fallback: str = "") -> str:
+        return translate_site_label(locale, site_key, fallback)
+
     response = TEMPLATES.TemplateResponse(
         request=request,
         name=name,
@@ -62,7 +118,9 @@ def _template_response(
             "title": title_text or (tr(title_key) if title_key else ""),
             "locale": locale,
             "tr": tr,
+            "site_label": site_label,
             "ui_messages_json": json.dumps(build_ui_messages(locale), ensure_ascii=False),
+            "site_labels_json": json.dumps(SITE_LABELS.get(locale, SITE_LABELS["en"]), ensure_ascii=False),
             **context,
         },
     )
@@ -122,10 +180,11 @@ def create_app(
     @app.get("/settings", response_class=HTMLResponse)
     async def settings_page(request: Request) -> HTMLResponse:
         settings_payload = settings_service.get_payload()
+        locale = resolve_locale(request)
         available_sites = [
             {
                 "key": site.key,
-                "name": site.name,
+                "name": translate_site_label(locale, site.key, site.name),
                 "experimental": site.key in BEST_EFFORT_SITE_KEYS,
             }
             for site in DEFAULT_SITES.values()
@@ -159,6 +218,7 @@ def create_app(
         page: int = 1,
         page_size: int = 50,
     ) -> HTMLResponse:
+        locale = resolve_locale(request)
         result = collector_service.list_jobs(
             q=q,
             site=site,
@@ -187,7 +247,13 @@ def create_app(
                 "it_only": it_only,
                 "job_family": job_family,
             },
-            available_sites=list(DEFAULT_SITES.values()),
+            available_sites=[
+                {
+                    "key": site_item.key,
+                    "name": translate_site_label(locale, site_item.key, site_item.name),
+                }
+                for site_item in DEFAULT_SITES.values()
+            ],
             job_families=[
                 "frontend",
                 "backend",

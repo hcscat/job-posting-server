@@ -14,7 +14,7 @@
     <select name="site">
       <option value="">{{ tr('jobs.all_sites') }}</option>
       {% for site_item in available_sites %}
-      <option value="{{ site_item.key }}" {% if filters.site == site_item.key %}selected{% endif %}>{{ site_item.name }}</option>
+      <option value="{{ site_item.key }}" {% if filters.site == site_item.key %}selected{% endif %}>{{ site_label(site_item.key, site_item.name) }}</option>
       {% endfor %}
     </select>
     <select name="job_family">
@@ -47,12 +47,12 @@
           <th>{{ tr('jobs.table.last_seen') }}</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="jobs-table-body">
         {% for job in jobs %}
-        <tr>
-          <td>{{ job.site_name }}</td>
+        <tr class="job-row" data-job-id="{{ job.id }}">
+          <td>{{ site_label(job.site_key, job.site_name) }}</td>
           <td>
-            <button type="button" class="job-link detail-trigger" data-job-id="{{ job.id }}">{{ job.title or job.search_title }}</button>
+            <button type="button" class="job-link detail-trigger" data-job-id="{{ job.id }}" aria-expanded="false">{{ job.title or job.search_title }}</button>
             <div class="subtle"><a href="{{ job.url }}" target="_blank" rel="noreferrer">{{ tr('jobs.external_posting') }}</a></div>
             <div class="subtle">{{ job.employment_type or tr('common.not_available') }} / {{ job.experience_level or tr('common.not_available') }}</div>
             {% if job.ai_summary %}
@@ -73,62 +73,65 @@
           <td colspan="7" class="muted center">{{ tr('jobs.no_results') }}</td>
         </tr>
         {% endfor %}
+        <tr id="job-detail-row" class="job-detail-inline-row is-hidden" data-job-id="">
+          <td colspan="7" class="detail-host-cell">
+            <section id="job-detail-drawer" class="panel detail-drawer is-hidden">
+              <div class="panel-header">
+                <h2 id="job-detail-title">{{ tr('jobs.drawer_title') }}</h2>
+                <div class="toolbar">
+                  <a id="job-detail-external" class="button ghost is-hidden" target="_blank" rel="noreferrer">{{ tr('jobs.open_external') }}</a>
+                  <button type="button" class="button ghost" id="job-detail-close">{{ tr('common.close') }}</button>
+                </div>
+              </div>
+              <p id="job-detail-status" class="muted">{{ tr('jobs.drawer_placeholder') }}</p>
+              <div id="job-detail-content" class="detail-drawer-content is-hidden">
+                <div class="detail-drawer-grid">
+                  <section class="detail-block">
+                    <h3>{{ tr('jobs.normalized') }}</h3>
+                    <dl id="job-detail-metadata" class="detail-kv"></dl>
+                  </section>
+                  <section class="detail-block">
+                    <h3>{{ tr('jobs.ai_summary') }}</h3>
+                    <p id="job-detail-summary"></p>
+                    <div class="detail-list-section">
+                      <h4>{{ tr('jobs.tech_stack') }}</h4>
+                      <div id="job-detail-tech-stack" class="chip-list"></div>
+                    </div>
+                    <div class="detail-list-section">
+                      <h4>{{ tr('jobs.requirements') }}</h4>
+                      <ul id="job-detail-requirements" class="detail-list"></ul>
+                    </div>
+                    <div class="detail-list-section">
+                      <h4>{{ tr('jobs.responsibilities') }}</h4>
+                      <ul id="job-detail-responsibilities" class="detail-list"></ul>
+                    </div>
+                    <div class="detail-list-section">
+                      <h4>{{ tr('jobs.benefits') }}</h4>
+                      <ul id="job-detail-benefits" class="detail-list"></ul>
+                    </div>
+                  </section>
+                </div>
+
+                <section class="detail-block">
+                  <h3>{{ tr('common.snapshots') }}</h3>
+                  <div id="job-detail-snapshots" class="detail-kv"></div>
+                </section>
+
+                <section class="detail-block">
+                  <h3>{{ tr('common.description') }}</h3>
+                  <pre id="job-detail-description" class="detail-pre"></pre>
+                </section>
+
+                <section class="detail-block">
+                  <h3>{{ tr('common.raw_payload') }}</h3>
+                  <pre id="job-detail-raw-payload" class="detail-pre"></pre>
+                </section>
+              </div>
+            </section>
+          </td>
+        </tr>
       </tbody>
     </table>
-  </div>
-</section>
-
-<section id="job-detail-drawer" class="panel detail-drawer is-hidden">
-  <div class="panel-header">
-    <h2 id="job-detail-title">{{ tr('jobs.drawer_title') }}</h2>
-    <div class="toolbar">
-      <a id="job-detail-external" class="button ghost is-hidden" target="_blank" rel="noreferrer">{{ tr('jobs.open_external') }}</a>
-      <button type="button" class="button ghost" id="job-detail-close">{{ tr('common.close') }}</button>
-    </div>
-  </div>
-  <p id="job-detail-status" class="muted">{{ tr('jobs.drawer_placeholder') }}</p>
-  <div id="job-detail-content" class="detail-drawer-content is-hidden">
-    <div class="detail-drawer-grid">
-      <section class="detail-block">
-        <h3>{{ tr('jobs.normalized') }}</h3>
-        <dl id="job-detail-metadata" class="detail-kv"></dl>
-      </section>
-      <section class="detail-block">
-        <h3>{{ tr('jobs.ai_summary') }}</h3>
-        <p id="job-detail-summary"></p>
-        <div class="detail-list-section">
-          <h4>{{ tr('jobs.tech_stack') }}</h4>
-          <div id="job-detail-tech-stack" class="chip-list"></div>
-        </div>
-        <div class="detail-list-section">
-          <h4>{{ tr('jobs.requirements') }}</h4>
-          <ul id="job-detail-requirements" class="detail-list"></ul>
-        </div>
-        <div class="detail-list-section">
-          <h4>{{ tr('jobs.responsibilities') }}</h4>
-          <ul id="job-detail-responsibilities" class="detail-list"></ul>
-        </div>
-        <div class="detail-list-section">
-          <h4>{{ tr('jobs.benefits') }}</h4>
-          <ul id="job-detail-benefits" class="detail-list"></ul>
-        </div>
-      </section>
-    </div>
-
-    <section class="detail-block">
-      <h3>{{ tr('common.snapshots') }}</h3>
-      <div id="job-detail-snapshots" class="detail-kv"></div>
-    </section>
-
-    <section class="detail-block">
-      <h3>{{ tr('common.description') }}</h3>
-      <pre id="job-detail-description" class="detail-pre"></pre>
-    </section>
-
-    <section class="detail-block">
-      <h3>{{ tr('common.raw_payload') }}</h3>
-      <pre id="job-detail-raw-payload" class="detail-pre"></pre>
-    </section>
   </div>
 </section>
 

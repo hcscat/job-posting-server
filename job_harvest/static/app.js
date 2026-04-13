@@ -6,6 +6,14 @@ const APP_MESSAGES = (() => {
   }
 })();
 
+const APP_SITE_LABELS = (() => {
+  try {
+    return JSON.parse(document.body?.dataset.siteLabels || "{}");
+  } catch (_error) {
+    return {};
+  }
+})();
+
 function t(key, replacements = {}) {
   const template = APP_MESSAGES[key] || key;
   return Object.entries(replacements).reduce(
@@ -28,6 +36,11 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function siteLabel(siteKey, fallback = "") {
+  if (!siteKey) return fallback || t("common.not_available");
+  return APP_SITE_LABELS[siteKey] || fallback || siteKey;
 }
 
 function setFieldValue(id, value) {
@@ -156,9 +169,81 @@ function translateJobFamily(value) {
   return translated === key ? value : translated;
 }
 
+function formatJobDescription(value) {
+  const source = String(value || "")
+    .replaceAll("\r\n", "\n")
+    .replaceAll("\r", "\n")
+    .replaceAll("\u00a0", " ")
+    .trim();
+  if (!source) {
+    return t("common.not_available");
+  }
+
+  const headings = [
+    "주요업무",
+    "자격요건",
+    "지원자격",
+    "우대사항",
+    "복지",
+    "혜택",
+    "기술스택",
+    "기술 스택",
+    "지원 방법",
+    "채용 절차",
+    "전형 절차",
+    "Introduction",
+    "Description",
+    "Primary Responsibility",
+    "Primary Responsibilities",
+    "Required Qualification",
+    "Requirements",
+    "Qualifications",
+    "Preferred Skill",
+    "Preferred",
+    "Benefits",
+    "Hiring Process",
+    "Tech Stack",
+    "Locations",
+  ];
+
+  let normalized = source
+    .replace(/\s([•▪■◆▶▷○●])\s*/g, "\n$1 ")
+    .replace(/(?<!\n)(\d+\.)\s+/g, "\n$1 ")
+    .replace(/\n{3,}/g, "\n\n");
+
+  headings.forEach((heading) => {
+    const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    normalized = normalized.replace(
+      new RegExp(`\\s*(${escaped}\\s*[:：]?)\\s*`, "g"),
+      `\n\n$1\n`
+    );
+  });
+
+  const rawLines = normalized.split("\n");
+  const lines = [];
+  const sectionHeading =
+    /^(Introduction|Description|Primary Responsibility|Primary Responsibilities|Required Qualification|Requirements|Qualifications|Preferred Skill|Preferred|Benefits|Hiring Process|Tech Stack|Locations|주요업무|자격요건|지원자격|우대사항|복지|혜택|기술스택|기술 스택|지원 방법|채용 절차|전형 절차)(\s*:?|\s*)$/i;
+
+  rawLines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (lines[lines.length - 1] !== "") {
+        lines.push("");
+      }
+      return;
+    }
+    if (sectionHeading.test(trimmed) && lines.length && lines[lines.length - 1] !== "") {
+      lines.push("");
+    }
+    lines.push(trimmed);
+  });
+
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function createMetadataMarkup(job) {
   const rows = [
-    ["common.site", job.site_name || t("common.not_available")],
+    ["common.site", siteLabel(job.site_key, job.site_name || "")],
     ["common.company", job.company || t("common.not_available")],
     ["common.location", job.location || t("common.not_available")],
     ["common.employment", job.employment_type || t("common.not_available")],
@@ -191,7 +276,26 @@ function createSnapshotMarkup(job) {
 
 async function openJobDetail(jobId) {
   const drawer = document.getElementById("job-detail-drawer");
-  if (!drawer) return;
+  const inlineRow = document.getElementById("job-detail-row");
+  if (!drawer || !inlineRow) return;
+
+  const trigger = document.querySelector(`.detail-trigger[data-job-id="${CSS.escape(String(jobId))}"]`);
+  const row = trigger?.closest("tr");
+  if (!row) return;
+
+  if (inlineRow.dataset.jobId === String(jobId) && !inlineRow.classList.contains("is-hidden")) {
+    closeJobDetail();
+    return;
+  }
+
+  inlineRow.dataset.jobId = String(jobId);
+  row.insertAdjacentElement("afterend", inlineRow);
+  inlineRow.classList.remove("is-hidden");
+
+  document.querySelectorAll(".detail-trigger[aria-expanded='true']").forEach((button) => {
+    button.setAttribute("aria-expanded", "false");
+  });
+  trigger?.setAttribute("aria-expanded", "true");
 
   const title = document.getElementById("job-detail-title");
   const status = document.getElementById("job-detail-status");
@@ -204,7 +308,7 @@ async function openJobDetail(jobId) {
   title.textContent = t("jobs.drawer_title");
   status.textContent = t("js.jobs.loading");
   status.classList.remove("is-hidden");
-  drawer.scrollIntoView({ behavior: "smooth", block: "start" });
+  inlineRow.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
   const response = await fetch(`/api/jobs/${jobId}`);
   if (!response.ok) {
@@ -222,7 +326,7 @@ async function openJobDetail(jobId) {
   document.getElementById("job-detail-responsibilities").innerHTML = createListMarkup(job.ai_responsibilities);
   document.getElementById("job-detail-benefits").innerHTML = createListMarkup(job.ai_benefits);
   document.getElementById("job-detail-snapshots").innerHTML = createSnapshotMarkup(job);
-  document.getElementById("job-detail-description").textContent = job.description || t("common.not_available");
+  document.getElementById("job-detail-description").textContent = formatJobDescription(job.description);
   document.getElementById("job-detail-raw-payload").textContent = JSON.stringify(job.raw_payload || {}, null, 2);
 
   if (job.url) {
@@ -232,6 +336,28 @@ async function openJobDetail(jobId) {
 
   status.classList.add("is-hidden");
   content.classList.remove("is-hidden");
+}
+
+function closeJobDetail() {
+  const drawer = document.getElementById("job-detail-drawer");
+  const inlineRow = document.getElementById("job-detail-row");
+  const content = document.getElementById("job-detail-content");
+  const status = document.getElementById("job-detail-status");
+  const external = document.getElementById("job-detail-external");
+  if (!drawer || !inlineRow) return;
+
+  drawer.classList.add("is-hidden");
+  content?.classList.add("is-hidden");
+  status?.classList.remove("is-hidden");
+  if (external) {
+    external.classList.add("is-hidden");
+    external.removeAttribute("href");
+  }
+  inlineRow.classList.add("is-hidden");
+  inlineRow.dataset.jobId = "";
+  document.querySelectorAll(".detail-trigger[aria-expanded='true']").forEach((button) => {
+    button.setAttribute("aria-expanded", "false");
+  });
 }
 
 function bindSettingsPage() {
@@ -318,9 +444,7 @@ function bindJobsPage() {
 
   const closeButton = document.getElementById("job-detail-close");
   if (closeButton) {
-    closeButton.addEventListener("click", () => {
-      drawer.classList.add("is-hidden");
-    });
+    closeButton.addEventListener("click", closeJobDetail);
   }
 }
 

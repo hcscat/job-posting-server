@@ -395,12 +395,36 @@ th {
   text-align: left;
 }
 
+.detail-trigger[aria-expanded="true"] {
+  color: var(--accent-dark);
+}
+
 .detail-drawer {
   margin-top: 18px;
   border: 1px solid rgba(184, 92, 56, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(248, 239, 230, 0.94)),
     var(--paper);
+}
+
+.job-detail-inline-row td {
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.detail-host-cell {
+  padding: 0 !important;
+}
+
+.job-detail-inline-cell {
+  padding: 0;
+}
+
+.job-detail-inline-row .detail-drawer {
+  margin-top: 0;
+  border-radius: 0 0 22px 22px;
+  box-shadow: none;
 }
 
 .detail-drawer-content {
@@ -473,6 +497,8 @@ th {
   border: 1px solid rgba(83, 64, 46, 0.08);
   white-space: pre-wrap;
   word-break: break-word;
+  line-height: 1.65;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
 @media (max-width: 1100px) {

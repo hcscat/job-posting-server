@@ -6,6 +6,55 @@ from fastapi import Request
 DEFAULT_LOCALE = "ko"
 SUPPORTED_LOCALES = ("ko", "en")
 LANG_COOKIE_NAME = "job_harvest_lang"
+SITE_LABELS: dict[str, dict[str, str]] = {
+    "ko": {
+        "saramin": "사람인",
+        "jobkorea": "잡코리아",
+        "linkedin": "링크드인",
+        "jobplanet": "잡플래닛",
+        "jumpit": "점핏",
+        "wanted": "원티드",
+        "rocketpunch": "로켓펀치",
+        "remember": "리멤버",
+        "blind": "블라인드",
+    },
+    "en": {
+        "saramin": "Saramin",
+        "jobkorea": "JobKorea",
+        "linkedin": "LinkedIn",
+        "jobplanet": "JobPlanet",
+        "jumpit": "Jumpit",
+        "wanted": "Wanted",
+        "rocketpunch": "RocketPunch",
+        "remember": "Remember",
+        "blind": "Blind",
+    },
+}
+
+SITE_LABELS = {
+    "ko": {
+        "saramin": "\uc0ac\ub78c\uc778",
+        "jobkorea": "\uc7a1\ucf54\ub9ac\uc544",
+        "linkedin": "\ub9c1\ud06c\ub4dc\uc778",
+        "jobplanet": "\uc7a1\ud50c\ub798\ub2db",
+        "jumpit": "\uc810\ud54f",
+        "wanted": "\uc6d0\ud2f0\ub4dc",
+        "rocketpunch": "\ub85c\ucf13\ud380\uce58",
+        "remember": "\ub9ac\uba64\ubc84",
+        "blind": "\ube14\ub77c\uc778\ub4dc",
+    },
+    "en": {
+        "saramin": "Saramin",
+        "jobkorea": "JobKorea",
+        "linkedin": "LinkedIn",
+        "jobplanet": "JobPlanet",
+        "jumpit": "Jumpit",
+        "wanted": "Wanted",
+        "rocketpunch": "RocketPunch",
+        "remember": "Remember",
+        "blind": "Blind",
+    },
+}
 
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "ko": {
@@ -426,6 +475,36 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
 }
 
+SITE_TRANSLATIONS = {
+    "ko": {
+        "site.saramin": "사람인",
+        "site.jobkorea": "잡코리아",
+        "site.linkedin": "링크드인",
+        "site.jobplanet": "잡플래닛",
+        "site.jumpit": "점핏",
+        "site.wanted": "원티드",
+        "site.rocketpunch": "로켓펀치",
+        "site.remember": "리멤버",
+        "site.blind": "블라인드",
+    },
+    "en": {
+        "site.saramin": "Saramin",
+        "site.jobkorea": "JobKorea",
+        "site.linkedin": "LinkedIn",
+        "site.jobplanet": "JobPlanet",
+        "site.jumpit": "Jumpit",
+        "site.wanted": "Wanted",
+        "site.rocketpunch": "RocketPunch",
+        "site.remember": "Remember",
+        "site.blind": "Blind",
+    },
+}
+
+for locale_key, mapping in SITE_TRANSLATIONS.items():
+    TRANSLATIONS[locale_key].update(mapping)
+
+SITE_TRANSLATION_KEYS = tuple(SITE_TRANSLATIONS["en"].keys())
+
 UI_MESSAGE_KEYS = (
     "js.settings.enter_request",
     "js.settings.interpreting",
@@ -475,6 +554,7 @@ UI_MESSAGE_KEYS = (
     "job_family.security",
     "job_family.ai-ml",
     "job_family.general-software",
+    *SITE_TRANSLATION_KEYS,
 )
 
 
@@ -508,11 +588,70 @@ def resolve_locale(request: Request) -> str:
 
 def translate(locale: str, key: str, **kwargs) -> str:
     language = locale if locale in TRANSLATIONS else DEFAULT_LOCALE
-    template = TRANSLATIONS.get(language, {}).get(key) or TRANSLATIONS["en"].get(key) or key
+    if key.startswith("site."):
+        site_key = key.split(".", 1)[1]
+        template = (
+            SITE_LABELS.get(language, {}).get(site_key)
+            or SITE_LABELS["en"].get(site_key)
+            or site_key
+        )
+    else:
+        template = TRANSLATIONS.get(language, {}).get(key) or TRANSLATIONS["en"].get(key) or key
     if not kwargs:
         return template
     return template.format(**kwargs)
 
 
+SITE_LABELS = {
+    "ko": {
+        "saramin": "사람인",
+        "jobkorea": "잡코리아",
+        "linkedin": "링크드인",
+        "jobplanet": "잡플래닛",
+        "jumpit": "점핏",
+        "wanted": "원티드",
+        "rocketpunch": "로켓펀치",
+        "remember": "리멤버",
+        "blind": "블라인드",
+    },
+    "en": {
+        "saramin": "Saramin",
+        "jobkorea": "JobKorea",
+        "linkedin": "LinkedIn",
+        "jobplanet": "JobPlanet",
+        "jumpit": "Jumpit",
+        "wanted": "Wanted",
+        "rocketpunch": "RocketPunch",
+        "remember": "Remember",
+        "blind": "Blind",
+    },
+}
+
+
+def build_site_labels(locale: str) -> dict[str, str]:
+    language = locale if locale in SITE_LABELS else DEFAULT_LOCALE
+    labels = dict(SITE_LABELS.get("en", {}))
+    labels.update(SITE_LABELS.get(language, {}))
+    return labels
+
+
+def translate_site_name(locale: str, site_key: str, fallback: str = "") -> str:
+    labels = build_site_labels(locale)
+    return labels.get(site_key, fallback or site_key)
+
+
 def build_ui_messages(locale: str) -> dict[str, str]:
-    return {key: translate(locale, key) for key in UI_MESSAGE_KEYS}
+    messages = {key: translate(locale, key) for key in UI_MESSAGE_KEYS}
+    for site_key, label in build_site_labels(locale).items():
+        messages[f"site.{site_key}"] = label
+    return messages
+
+
+def build_site_labels(locale: str) -> dict[str, str]:
+    language = locale if locale in SITE_LABELS else DEFAULT_LOCALE
+    return {
+        site_key: SITE_LABELS.get(language, {}).get(site_key)
+        or SITE_LABELS["en"].get(site_key)
+        or site_key
+        for site_key in SITE_LABELS["en"]
+    }

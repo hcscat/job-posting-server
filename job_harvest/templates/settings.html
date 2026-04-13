@@ -29,7 +29,7 @@
       {% for site in available_sites %}
       <label class="checkbox-card">
         <input type="checkbox" name="site_keys" value="{{ site.key }}">
-        <span>{{ site.name }}</span>
+        <span>{{ site_label(site.key, site.name) }}</span>
         {% if site.experimental %}<small>{{ tr('common.best_effort') }}</small>{% endif %}
       </label>
       {% endfor %}
