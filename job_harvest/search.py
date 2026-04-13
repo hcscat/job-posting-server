@@ -28,6 +28,7 @@ def normalize_url(url: str) -> str:
     host = parsed.netloc.lower()
     normalized_path = parsed.path.rstrip("/") or "/"
 
+    # These sites attach volatile query params to the same posting, so strip them aggressively.
     if host.endswith("linkedin.com"):
         host = "www.linkedin.com"
         query = ""

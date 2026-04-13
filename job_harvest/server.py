@@ -97,6 +97,7 @@ def translate_site_label(locale: str, site_key: str, fallback: str = "") -> str:
     return SITE_LABELS.get(locale, SITE_LABELS["en"]).get(site_key, fallback or site_key)
 
 
+# Some sites intermittently return mojibake; score repaired text before accepting it.
 def _text_quality_score(value: str) -> int:
     control_penalty = sum(1 for ch in value if "\u0080" <= ch <= "\u009f") * 4
     replacement_penalty = value.count("\ufffd") * 4
@@ -134,6 +135,7 @@ def _build_description_text(payload: dict[str, Any]) -> str:
     if description:
         return description
 
+    # Keep detail drawers usable even when the source detail page could not be fetched.
     sections: list[str] = []
 
     def append_section(title: str, values: list[str]) -> None:

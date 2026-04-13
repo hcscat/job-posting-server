@@ -52,6 +52,7 @@ function normalizeDisplayText(value) {
     .trim();
 }
 
+// Normalize section headings and bullets so mixed-source detail text stays readable in the drawer.
 function formatNormalizedJobDescription(value) {
   const source = normalizeDisplayText(value);
   if (!source) {
@@ -129,6 +130,7 @@ function formatNormalizedJobDescription(value) {
 }
 
 function buildDescriptionText(job) {
+  // When detail fetch falls back to listing data, prefer the best available summary text.
   return normalizeDisplayText(job.description || job.ai_summary || job.summary || "");
 }
 
