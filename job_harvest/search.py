@@ -23,20 +23,30 @@ TRACKING_KEYS = {
     "tracking",
 }
 
-
 def normalize_url(url: str) -> str:
     parsed = urlparse(url.strip())
-    filtered = [
-        (key, value)
-        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
-        if key.lower() not in TRACKING_KEYS and not key.lower().startswith("utm_")
-    ]
-    query = urlencode(filtered, doseq=True)
+    host = parsed.netloc.lower()
     normalized_path = parsed.path.rstrip("/") or "/"
+
+    if host.endswith("linkedin.com"):
+        host = "www.linkedin.com"
+        query = ""
+    elif host.endswith("teamblind.com"):
+        host = "www.teamblind.com"
+        query = ""
+    elif host.endswith("jobkorea.co.kr") and normalized_path.lower().startswith("/recruit/gi_read/"):
+        query = ""
+    else:
+        filtered = [
+            (key, value)
+            for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+            if key.lower() not in TRACKING_KEYS and not key.lower().startswith("utm_")
+        ]
+        query = urlencode(filtered, doseq=True)
     return urlunparse(
         (
             parsed.scheme.lower(),
-            parsed.netloc.lower(),
+            host,
             normalized_path,
             parsed.params,
             query,

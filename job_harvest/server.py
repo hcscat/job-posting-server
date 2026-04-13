@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import html
 import json
 from contextlib import asynccontextmanager
 from math import ceil
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -93,6 +95,95 @@ SITE_LABELS = {
 
 def translate_site_label(locale: str, site_key: str, fallback: str = "") -> str:
     return SITE_LABELS.get(locale, SITE_LABELS["en"]).get(site_key, fallback or site_key)
+
+
+def _text_quality_score(value: str) -> int:
+    control_penalty = sum(1 for ch in value if "\u0080" <= ch <= "\u009f") * 4
+    replacement_penalty = value.count("\ufffd") * 4
+    mojibake_penalty = sum(value.count(marker) for marker in ("Â", "Ã", "â", "ï»¿")) * 2
+    hangul_bonus = sum(1 for ch in value if "\uac00" <= ch <= "\ud7a3") * 3
+    readable_bonus = sum(1 for ch in value if ch.isalnum())
+    return hangul_bonus + readable_bonus - control_penalty - replacement_penalty - mojibake_penalty
+
+
+def _repair_text(value: str) -> str:
+    current = html.unescape(str(value or "")).replace("\u00a0", " ")
+    for _ in range(2):
+        try:
+            candidate = current.encode("latin1").decode("utf-8")
+        except UnicodeError:
+            break
+        if candidate == current or _text_quality_score(candidate) <= _text_quality_score(current):
+            break
+        current = candidate
+    return current.strip()
+
+
+def _repair_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _repair_text(value)
+    if isinstance(value, list):
+        return [_repair_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _repair_value(item) for key, item in value.items()}
+    return value
+
+
+def _build_description_text(payload: dict[str, Any]) -> str:
+    description = _repair_text(payload.get("description", ""))
+    if description:
+        return description
+
+    sections: list[str] = []
+
+    def append_section(title: str, values: list[str]) -> None:
+        cleaned = []
+        for value in values:
+            item = _repair_text(value)
+            if item:
+                cleaned.append(item)
+        if cleaned:
+            sections.append(f"{title}\n" + "\n".join(f"- {value}" for value in cleaned))
+
+    ai_summary = _repair_text(payload.get("ai_summary", ""))
+    summary = _repair_text(payload.get("summary", ""))
+    if ai_summary:
+        sections.append(ai_summary)
+    elif summary:
+        sections.append(summary)
+
+    append_section("Responsibilities", payload.get("ai_responsibilities", []))
+    append_section("Requirements", payload.get("ai_requirements", []))
+    append_section("Benefits", payload.get("ai_benefits", []))
+
+    if not sections:
+        fallback = []
+        for field in ("title", "company", "location", "employment_type", "experience_level", "education_level"):
+            value = _repair_text(payload.get(field, ""))
+            if value:
+                fallback.append(value)
+        if fallback:
+            sections.append(" | ".join(fallback))
+
+    limited_capture = payload.get("status_code", 0) >= 400 or payload.get("extraction_method") == "search-result"
+    if limited_capture:
+        sections.append("Detail page capture was limited, so the listing-based summary is shown.")
+
+    return "\n\n".join(section for section in sections if section).strip()
+
+
+def _serialize_job_posting(item: Any) -> JobPostingRead:
+    payload = JobPostingRead.model_validate(item).model_dump()
+    payload = _repair_value(payload)
+    payload["description"] = _build_description_text(payload)
+    return JobPostingRead.model_validate(payload)
+
+
+def _serialize_job_detail(item: Any) -> JobDetailRead:
+    payload = JobDetailRead.model_validate(item).model_dump()
+    payload = _repair_value(payload)
+    payload["description"] = _build_description_text(payload)
+    return JobDetailRead.model_validate(payload)
 
 
 def _template_response(
@@ -313,7 +404,7 @@ def create_app(
             page_size=page_size,
         )
         return JobListResponse(
-            items=[JobPostingRead.model_validate(item) for item in result.items],
+            items=[_serialize_job_posting(item) for item in result.items],
             total=result.total,
             page=result.page,
             page_size=result.page_size,
@@ -339,7 +430,7 @@ def create_app(
         job = collector_service.get_job(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found.")
-        return JobDetailRead.model_validate(job)
+        return _serialize_job_detail(job)
 
     @app.get("/api/raw/{category}/{sha256_hex}", response_model=RawSnapshotRead)
     async def api_raw_snapshot(category: str, sha256_hex: str) -> RawSnapshotRead:

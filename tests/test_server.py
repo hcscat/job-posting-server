@@ -9,6 +9,10 @@ from job_harvest.db_models import CollectionRunRecord, JobPostingRecord, utcnow
 from job_harvest.server import create_app
 
 
+def _mojibake(text: str) -> str:
+    return text.encode("utf-8").decode("latin1")
+
+
 class ServerTest(unittest.TestCase):
     def test_pages_settings_and_locale(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -131,7 +135,6 @@ class ServerTest(unittest.TestCase):
                 )
                 session.add(job)
                 session.commit()
-                session.refresh(job)
 
             (export_dir / "all_postings.json").write_text(
                 json.dumps(
@@ -195,6 +198,68 @@ class ServerTest(unittest.TestCase):
                     client.get(f"/raw/detail/{detail_snapshot.sha256_hex}").status_code,
                     200,
                 )
+
+    def test_api_job_text_cleanup_and_description_fallback(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            app = create_app(data_dir=temp_dir)
+            db = app.state.settings_service._db
+
+            with db.session_factory() as session:
+                job = JobPostingRecord(
+                    normalized_url="https://example.com/jobs/data-platform",
+                    url="https://example.com/jobs/data-platform",
+                    site_key="blind",
+                    site_name="Blind",
+                    source_query="data",
+                    title=_mojibake("데이터 엔지니어"),
+                    search_title=_mojibake("데이터 엔지니어"),
+                    company=_mojibake("예시 회사"),
+                    location=_mojibake("서울"),
+                    employment_type="full-time",
+                    experience_level="5 years",
+                    summary=_mojibake("데이터 엔지니어 · Python"),
+                    description="",
+                    extraction_method="search-result",
+                    status_code=403,
+                    is_it_job=True,
+                    ai_provider="heuristic",
+                    ai_summary=_mojibake("원격 데이터 파이프라인 개발"),
+                    ai_requirements=[_mojibake("Python"), _mojibake("Airflow")],
+                    ai_responsibilities=[_mojibake("데이터 파이프라인 구축")],
+                    ai_benefits=[_mojibake("교육 지원")],
+                    raw_payload={
+                        "headline": _mojibake("데이터 · 분석"),
+                        "highlights": [_mojibake("복지 · 교육")],
+                    },
+                    first_seen_at=utcnow(),
+                    last_seen_at=utcnow(),
+                    seen_count=1,
+                )
+                session.add(job)
+                session.commit()
+
+            with TestClient(app) as client:
+                list_response = client.get("/api/jobs?site=blind")
+                self.assertEqual(list_response.status_code, 200)
+                list_payload = list_response.json()
+                self.assertEqual(list_payload["total"], 1)
+                self.assertEqual(list_payload["items"][0]["title"], "데이터 엔지니어")
+                self.assertEqual(list_payload["items"][0]["summary"], "데이터 엔지니어 · Python")
+                self.assertIn("원격 데이터 파이프라인 개발", list_payload["items"][0]["description"])
+
+                detail_response = client.get("/api/jobs/1")
+                self.assertEqual(detail_response.status_code, 200)
+                detail_payload = detail_response.json()
+                self.assertEqual(detail_payload["title"], "데이터 엔지니어")
+                self.assertEqual(detail_payload["summary"], "데이터 엔지니어 · Python")
+                self.assertEqual(detail_payload["ai_summary"], "원격 데이터 파이프라인 개발")
+                self.assertEqual(detail_payload["raw_payload"]["headline"], "데이터 · 분석")
+                self.assertEqual(detail_payload["raw_payload"]["highlights"], ["복지 · 교육"])
+                self.assertIn("Responsibilities", detail_payload["description"])
+                self.assertIn("데이터 파이프라인 구축", detail_payload["description"])
+                self.assertIn("Requirements", detail_payload["description"])
+                self.assertIn("Benefits", detail_payload["description"])
+                self.assertIn("Detail page capture was limited", detail_payload["description"])
 
 
 if __name__ == "__main__":

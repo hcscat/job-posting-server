@@ -38,6 +38,100 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function decodeHtmlEntities(value) {
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = String(value ?? "");
+  return textarea.value;
+}
+
+function normalizeDisplayText(value) {
+  return decodeHtmlEntities(value)
+    .replaceAll("\r\n", "\n")
+    .replaceAll("\r", "\n")
+    .replaceAll("\u00a0", " ")
+    .trim();
+}
+
+function formatNormalizedJobDescription(value) {
+  const source = normalizeDisplayText(value);
+  if (!source) {
+    return t("common.not_available");
+  }
+
+  const headings = [
+    "주요 업무",
+    "주요업무",
+    "자격 요건",
+    "자격요건",
+    "우대 사항",
+    "우대사항",
+    "복지",
+    "혜택",
+    "기술 스택",
+    "기술스택",
+    "지원 방법",
+    "채용 절차",
+    "전형 절차",
+    "Introduction",
+    "Description",
+    "Primary Responsibility",
+    "Primary Responsibilities",
+    "Responsibilities",
+    "Required Qualification",
+    "Required Qualifications",
+    "Requirements",
+    "Qualifications",
+    "Preferred Skill",
+    "Preferred Skills",
+    "Preferred",
+    "Preferred Qualification",
+    "Preferred Qualifications",
+    "Benefits",
+    "Hiring Process",
+    "Tech Stack",
+    "Location",
+    "Locations",
+  ];
+
+  let normalized = source
+    .replace(/([•·▪■])\s*/g, "\n- ")
+    .replace(/(?<!\n)(\d+\.)\s+/g, "\n$1 ")
+    .replace(/\n{3,}/g, "\n\n");
+
+  headings.forEach((heading) => {
+    const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    normalized = normalized.replace(
+      new RegExp(`\\s*(${escaped})(\\s*[:|])\\s*`, "g"),
+      `\n\n$1$2\n`
+    );
+  });
+
+  const rawLines = normalized.split("\n");
+  const lines = [];
+  const sectionHeading =
+    /^(Introduction|Description|Primary Responsibility|Primary Responsibilities|Responsibilities|Required Qualification|Required Qualifications|Requirements|Qualifications|Preferred Skill|Preferred Skills|Preferred|Preferred Qualification|Preferred Qualifications|Benefits|Hiring Process|Tech Stack|Location|Locations|주요 업무|주요업무|자격 요건|자격요건|우대 사항|우대사항|복지|혜택|기술 스택|기술스택|지원 방법|채용 절차|전형 절차)(\s*:?|\s*)$/i;
+
+  rawLines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (lines[lines.length - 1] !== "") {
+        lines.push("");
+      }
+      return;
+    }
+    if (sectionHeading.test(trimmed) && lines.length && lines[lines.length - 1] !== "") {
+      lines.push("");
+    }
+    lines.push(trimmed);
+  });
+
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function buildDescriptionText(job) {
+  return normalizeDisplayText(job.description || job.ai_summary || job.summary || "");
+}
+
 function siteLabel(siteKey, fallback = "") {
   if (!siteKey) return fallback || t("common.not_available");
   return APP_SITE_LABELS[siteKey] || fallback || siteKey;
@@ -140,7 +234,9 @@ function collectSettingsPayload() {
 }
 
 function createListMarkup(values) {
-  const items = Array.isArray(values) ? values.filter(Boolean) : [];
+  const items = Array.isArray(values)
+    ? values.map((value) => normalizeDisplayText(value)).filter(Boolean)
+    : [];
   if (!items.length) {
     return `<li>${escapeHtml(t("common.not_available"))}</li>`;
   }
@@ -148,7 +244,9 @@ function createListMarkup(values) {
 }
 
 function createChipMarkup(values) {
-  const items = Array.isArray(values) ? values.filter(Boolean) : [];
+  const items = Array.isArray(values)
+    ? values.map((value) => normalizeDisplayText(value)).filter(Boolean)
+    : [];
   if (!items.length) {
     return `<span class="subtle">${escapeHtml(t("common.not_available"))}</span>`;
   }
@@ -320,13 +418,13 @@ async function openJobDetail(jobId) {
   title.textContent = job.title || job.search_title || t("jobs.drawer_title");
   document.getElementById("job-detail-metadata").innerHTML = createMetadataMarkup(job);
   document.getElementById("job-detail-summary").textContent =
-    job.ai_summary || job.summary || t("jobs.summary_empty");
+    normalizeDisplayText(job.ai_summary || job.summary || t("jobs.summary_empty"));
   document.getElementById("job-detail-tech-stack").innerHTML = createChipMarkup(job.ai_tech_stack);
   document.getElementById("job-detail-requirements").innerHTML = createListMarkup(job.ai_requirements);
   document.getElementById("job-detail-responsibilities").innerHTML = createListMarkup(job.ai_responsibilities);
   document.getElementById("job-detail-benefits").innerHTML = createListMarkup(job.ai_benefits);
   document.getElementById("job-detail-snapshots").innerHTML = createSnapshotMarkup(job);
-  document.getElementById("job-detail-description").textContent = formatJobDescription(job.description);
+  document.getElementById("job-detail-description").textContent = formatNormalizedJobDescription(buildDescriptionText(job));
   document.getElementById("job-detail-raw-payload").textContent = JSON.stringify(job.raw_payload || {}, null, 2);
 
   if (job.url) {
