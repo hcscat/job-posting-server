@@ -5,6 +5,7 @@ import os
 import re
 from dataclasses import dataclass
 
+from job_harvest.config import ADVANCED_FILTER_FIELDS
 from job_harvest.schemas import SettingsPayload
 from job_harvest.sites import DEFAULT_SITES
 
@@ -154,6 +155,26 @@ FIELD_MARKERS = {
     "employment_types": ("고용형태", "근무형태", "employment", "employment type"),
     "required_terms": ("필수", "반드시 포함", "must include", "required"),
     "exclude_keywords": ("제외", "빼고", "without", "exclude"),
+    "industries": ("산업", "업종", "사업 분야", "industry", "industries"),
+    "salary_ranges": ("연봉", "급여", "보상", "salary", "salaries"),
+    "company_types": ("회사 유형", "기업 유형", "company type", "company types"),
+    "company_sizes": ("회사 규모", "기업 규모", "company size", "company sizes"),
+    "position_levels": ("직급", "직책", "레벨", "position level", "position levels"),
+    "majors": ("전공", "major", "majors"),
+    "certifications": ("자격증", "인증", "certification", "certifications"),
+    "preferred_conditions": ("우대", "우대조건", "preferred", "preferred conditions"),
+    "welfare": ("복지", "복리후생", "welfare", "benefits"),
+    "skills": ("기술스택", "사용 기술", "tech stack", "skill", "skills"),
+    "tags": ("태그", "분야 태그", "tag", "tags"),
+    "workplace_types": ("근무 방식", "원격", "재택", "하이브리드", "workplace", "remote", "hybrid"),
+    "date_posted": ("게시일", "등록일", "업로드일", "date posted"),
+    "deadline": ("마감일", "마감", "deadline"),
+    "easy_apply": ("간편지원", "easy apply"),
+    "applicant_signals": ("지원자", "경쟁도", "applicant", "applicants"),
+    "network_signals": ("네트워크", "추천 연결", "network"),
+    "leader_positions": ("리더급", "팀장급", "leader"),
+    "headhunting": ("헤드헌팅", "파견 제외", "headhunting"),
+    "theme_tags": ("테마", "특집", "theme", "themes"),
 }
 
 EXPERIENCE_REGEXES = (
@@ -216,7 +237,11 @@ def _interpret_with_openai(
                             "settings object. Return strict JSON with keys: updates, notes. "
                             "updates may contain only these keys: site_keys, crawl_strategy, crawl_terms, queries, "
                             "roles, keywords, exclude_keywords, locations, companies, experience_levels, "
-                            "education_levels, employment_types, required_terms, strict_match_groups. "
+                            "education_levels, employment_types, required_terms, industries, salary_ranges, "
+                            "company_types, company_sizes, position_levels, majors, certifications, "
+                            "preferred_conditions, welfare, skills, tags, workplace_types, date_posted, "
+                            "deadline, easy_apply, applicant_signals, network_signals, leader_positions, "
+                            "headhunting, theme_tags, strict_match_groups. "
                             "Values must be strings or arrays of strings. Keep values concise."
                         ),
                     }
@@ -274,6 +299,10 @@ def _interpret_with_heuristics(text: str, current_payload: SettingsPayload) -> R
     experience_levels = _dedupe(_extract_experience_levels(text) + _extract_field_values(text, "experience_levels"))
     required_terms = _extract_field_values(text, "required_terms")
     exclude_keywords = _extract_field_values(text, "exclude_keywords")
+    advanced_updates = {
+        field_name: _extract_field_values(text, field_name)
+        for field_name in ADVANCED_FILTER_FIELDS
+    }
 
     if roles:
         updates["roles"] = roles
@@ -293,6 +322,9 @@ def _interpret_with_heuristics(text: str, current_payload: SettingsPayload) -> R
         updates["required_terms"] = required_terms
     if exclude_keywords:
         updates["exclude_keywords"] = exclude_keywords
+    for field_name, values in advanced_updates.items():
+        if values:
+            updates[field_name] = values
 
     strict_match_groups: list[str] = []
     if _contains_any(lowered, STRICT_PATTERNS):
@@ -307,7 +339,13 @@ def _interpret_with_heuristics(text: str, current_payload: SettingsPayload) -> R
 
     if _contains_any(lowered, BROAD_PATTERNS):
         updates["crawl_strategy"] = "broad_it_scan"
-        crawl_terms = _dedupe(roles + keywords)
+        crawl_terms = _dedupe(
+            roles
+            + keywords
+            + advanced_updates.get("skills", [])
+            + advanced_updates.get("tags", [])
+            + advanced_updates.get("industries", [])
+        )
         if crawl_terms:
             updates["crawl_terms"] = crawl_terms
     else:
@@ -318,6 +356,8 @@ def _interpret_with_heuristics(text: str, current_payload: SettingsPayload) -> R
             locations=locations,
             companies=companies,
             experience_levels=experience_levels,
+            employment_types=employment_types,
+            advanced_updates=advanced_updates,
         )
         updates["queries"] = queries or [text]
 
@@ -380,9 +420,29 @@ def _build_queries_from_updates(
     locations: list[str],
     companies: list[str],
     experience_levels: list[str],
+    employment_types: list[str],
+    advanced_updates: dict[str, list[str]],
 ) -> list[str]:
-    seeds = roles or keywords or companies
-    suffix = locations + experience_levels
+    seeds = (
+        roles
+        or advanced_updates.get("skills", [])
+        or advanced_updates.get("tags", [])
+        or advanced_updates.get("industries", [])
+        or keywords
+        or companies
+    )
+    suffix = (
+        locations
+        + experience_levels
+        + employment_types
+        + advanced_updates.get("workplace_types", [])
+        + advanced_updates.get("company_types", [])
+        + advanced_updates.get("salary_ranges", [])
+        + advanced_updates.get("position_levels", [])
+        + advanced_updates.get("date_posted", [])
+        + advanced_updates.get("deadline", [])
+        + advanced_updates.get("preferred_conditions", [])
+    )
     queries: list[str] = []
     for seed in seeds[:6]:
         parts = [seed, *suffix[:4]]
@@ -423,6 +483,7 @@ def _sanitize_updates(updates: dict[str, object]) -> dict[str, object]:
         "education_levels",
         "employment_types",
         "required_terms",
+        *ADVANCED_FILTER_FIELDS,
         "strict_match_groups",
     }
     allowed_scalars = {"crawl_strategy"}

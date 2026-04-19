@@ -113,4 +113,6 @@ These paths are ignored by Git through `.gitignore`.
 ## Project Docs
 
 - Project identity: [docs/project-identity.ko.md](./docs/project-identity.ko.md)
+- Site filter research: [docs/research/job-site-filters.ko.md](./docs/research/job-site-filters.ko.md)
+- Filter taxonomy map: [job_harvest/filter_taxonomy.py](./job_harvest/filter_taxonomy.py)
 - Agent skill pack: [agent-pack/README.md](./agent-pack/README.md)

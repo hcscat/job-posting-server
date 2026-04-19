@@ -8,23 +8,17 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from job_harvest.config import (
+    ADVANCED_FILTER_FIELDS,
     DEFAULT_EXTRA_TERMS,
     DEFAULT_IT_CRAWL_TERMS,
     DEFAULT_SITE_KEYS,
     DEFAULT_USER_AGENT,
+    STRICT_MATCHABLE_FIELDS,
 )
 from job_harvest.sites import DEFAULT_SITES
 
 
-STRICT_MATCH_GROUPS = {
-    "roles",
-    "keywords",
-    "locations",
-    "companies",
-    "experience_levels",
-    "education_levels",
-    "employment_types",
-}
+STRICT_MATCH_GROUPS = set(STRICT_MATCHABLE_FIELDS)
 TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 
 
@@ -45,6 +39,26 @@ class SettingsPayload(BaseModel):
     education_levels: list[str] = Field(default_factory=list)
     employment_types: list[str] = Field(default_factory=list)
     required_terms: list[str] = Field(default_factory=list)
+    industries: list[str] = Field(default_factory=list)
+    salary_ranges: list[str] = Field(default_factory=list)
+    company_types: list[str] = Field(default_factory=list)
+    company_sizes: list[str] = Field(default_factory=list)
+    position_levels: list[str] = Field(default_factory=list)
+    majors: list[str] = Field(default_factory=list)
+    certifications: list[str] = Field(default_factory=list)
+    preferred_conditions: list[str] = Field(default_factory=list)
+    welfare: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    workplace_types: list[str] = Field(default_factory=list)
+    date_posted: list[str] = Field(default_factory=list)
+    deadline: list[str] = Field(default_factory=list)
+    easy_apply: list[str] = Field(default_factory=list)
+    applicant_signals: list[str] = Field(default_factory=list)
+    network_signals: list[str] = Field(default_factory=list)
+    leader_positions: list[str] = Field(default_factory=list)
+    headhunting: list[str] = Field(default_factory=list)
+    theme_tags: list[str] = Field(default_factory=list)
     extra_terms: list[str] = Field(default_factory=lambda: list(DEFAULT_EXTRA_TERMS))
     strict_match_groups: list[str] = Field(default_factory=list)
 
@@ -84,6 +98,7 @@ class SettingsPayload(BaseModel):
         "education_levels",
         "employment_types",
         "required_terms",
+        *ADVANCED_FILTER_FIELDS,
         "extra_terms",
         "strict_match_groups",
     )

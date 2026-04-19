@@ -49,6 +49,57 @@ DEFAULT_USER_AGENT = (
     "(KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
 )
 
+ADVANCED_FILTER_FIELDS = (
+    "industries",
+    "salary_ranges",
+    "company_types",
+    "company_sizes",
+    "position_levels",
+    "majors",
+    "certifications",
+    "preferred_conditions",
+    "welfare",
+    "skills",
+    "tags",
+    "workplace_types",
+    "date_posted",
+    "deadline",
+    "easy_apply",
+    "applicant_signals",
+    "network_signals",
+    "leader_positions",
+    "headhunting",
+    "theme_tags",
+)
+
+CORE_FILTER_FIELDS = (
+    "roles",
+    "keywords",
+    "exclude_keywords",
+    "locations",
+    "companies",
+    "experience_levels",
+    "education_levels",
+    "employment_types",
+    "required_terms",
+)
+
+CRITERIA_FILTER_FIELDS = CORE_FILTER_FIELDS + ADVANCED_FILTER_FIELDS
+PASSIVE_FILTER_FIELDS = {
+    "date_posted",
+    "deadline",
+    "easy_apply",
+    "applicant_signals",
+    "network_signals",
+    "leader_positions",
+    "headhunting",
+}
+STRICT_MATCHABLE_FIELDS = tuple(
+    field_name
+    for field_name in CRITERIA_FILTER_FIELDS
+    if field_name not in {"exclude_keywords", "required_terms", *PASSIVE_FILTER_FIELDS}
+)
+
 
 @dataclass
 class SearchConfig:
@@ -84,6 +135,26 @@ class CriteriaConfig:
     education_levels: list[str] = field(default_factory=list)
     employment_types: list[str] = field(default_factory=list)
     required_terms: list[str] = field(default_factory=list)
+    industries: list[str] = field(default_factory=list)
+    salary_ranges: list[str] = field(default_factory=list)
+    company_types: list[str] = field(default_factory=list)
+    company_sizes: list[str] = field(default_factory=list)
+    position_levels: list[str] = field(default_factory=list)
+    majors: list[str] = field(default_factory=list)
+    certifications: list[str] = field(default_factory=list)
+    preferred_conditions: list[str] = field(default_factory=list)
+    welfare: list[str] = field(default_factory=list)
+    skills: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    workplace_types: list[str] = field(default_factory=list)
+    date_posted: list[str] = field(default_factory=list)
+    deadline: list[str] = field(default_factory=list)
+    easy_apply: list[str] = field(default_factory=list)
+    applicant_signals: list[str] = field(default_factory=list)
+    network_signals: list[str] = field(default_factory=list)
+    leader_positions: list[str] = field(default_factory=list)
+    headhunting: list[str] = field(default_factory=list)
+    theme_tags: list[str] = field(default_factory=list)
     extra_terms: list[str] = field(default_factory=lambda: list(DEFAULT_EXTRA_TERMS))
     strict_match_groups: list[str] = field(default_factory=list)
 
@@ -161,6 +232,26 @@ def _build_criteria_config(raw: dict[str, Any]) -> CriteriaConfig:
         education_levels=_ensure_list(raw.get("education_levels")),
         employment_types=_ensure_list(raw.get("employment_types")),
         required_terms=_ensure_list(raw.get("required_terms")),
+        industries=_ensure_list(raw.get("industries")),
+        salary_ranges=_ensure_list(raw.get("salary_ranges")),
+        company_types=_ensure_list(raw.get("company_types")),
+        company_sizes=_ensure_list(raw.get("company_sizes")),
+        position_levels=_ensure_list(raw.get("position_levels")),
+        majors=_ensure_list(raw.get("majors")),
+        certifications=_ensure_list(raw.get("certifications")),
+        preferred_conditions=_ensure_list(raw.get("preferred_conditions")),
+        welfare=_ensure_list(raw.get("welfare")),
+        skills=_ensure_list(raw.get("skills")),
+        tags=_ensure_list(raw.get("tags")),
+        workplace_types=_ensure_list(raw.get("workplace_types")),
+        date_posted=_ensure_list(raw.get("date_posted")),
+        deadline=_ensure_list(raw.get("deadline")),
+        easy_apply=_ensure_list(raw.get("easy_apply")),
+        applicant_signals=_ensure_list(raw.get("applicant_signals")),
+        network_signals=_ensure_list(raw.get("network_signals")),
+        leader_positions=_ensure_list(raw.get("leader_positions")),
+        headhunting=_ensure_list(raw.get("headhunting")),
+        theme_tags=_ensure_list(raw.get("theme_tags")),
         extra_terms=_ensure_list(raw.get("extra_terms")) or list(DEFAULT_EXTRA_TERMS),
         strict_match_groups=_ensure_list(raw.get("strict_match_groups")),
     )
@@ -247,6 +338,26 @@ def config_to_dict(config: AppConfig) -> dict[str, Any]:
             "education_levels": list(config.criteria.education_levels),
             "employment_types": list(config.criteria.employment_types),
             "required_terms": list(config.criteria.required_terms),
+            "industries": list(config.criteria.industries),
+            "salary_ranges": list(config.criteria.salary_ranges),
+            "company_types": list(config.criteria.company_types),
+            "company_sizes": list(config.criteria.company_sizes),
+            "position_levels": list(config.criteria.position_levels),
+            "majors": list(config.criteria.majors),
+            "certifications": list(config.criteria.certifications),
+            "preferred_conditions": list(config.criteria.preferred_conditions),
+            "welfare": list(config.criteria.welfare),
+            "skills": list(config.criteria.skills),
+            "tags": list(config.criteria.tags),
+            "workplace_types": list(config.criteria.workplace_types),
+            "date_posted": list(config.criteria.date_posted),
+            "deadline": list(config.criteria.deadline),
+            "easy_apply": list(config.criteria.easy_apply),
+            "applicant_signals": list(config.criteria.applicant_signals),
+            "network_signals": list(config.criteria.network_signals),
+            "leader_positions": list(config.criteria.leader_positions),
+            "headhunting": list(config.criteria.headhunting),
+            "theme_tags": list(config.criteria.theme_tags),
             "extra_terms": list(config.criteria.extra_terms),
             "strict_match_groups": list(config.criteria.strict_match_groups),
         },
@@ -282,13 +393,44 @@ def build_queries(criteria: CriteriaConfig, manual_queries: list[str]) -> list[s
         + criteria.experience_levels
         + criteria.education_levels
         + criteria.employment_types
+        + criteria.industries
+        + criteria.salary_ranges
+        + criteria.company_types
+        + criteria.company_sizes
+        + criteria.position_levels
+        + criteria.majors
+        + criteria.certifications
+        + criteria.preferred_conditions
+        + criteria.welfare
+        + criteria.skills
+        + criteria.tags
+        + criteria.workplace_types
+        + criteria.date_posted
+        + criteria.deadline
+        + criteria.easy_apply
+        + criteria.applicant_signals
+        + criteria.network_signals
+        + criteria.leader_positions
+        + criteria.headhunting
+        + criteria.theme_tags
+        + criteria.required_terms
         + criteria.extra_terms
     )
 
-    seeds = criteria.roles or criteria.required_terms or ["채용 공고"]
+    seeds = (
+        criteria.roles
+        or criteria.skills
+        or criteria.tags
+        or criteria.industries
+        or criteria.position_levels
+        or criteria.companies
+        or criteria.required_terms
+        or ["채용 공고"]
+    )
     queries = []
-    for seed in seeds:
-        queries.append(" ".join([seed, *shared_terms]).strip())
+    for seed in seeds[:8]:
+        suffix = [term for term in shared_terms if term.casefold() != seed.casefold()]
+        queries.append(" ".join([seed, *suffix[:6]]).strip())
     return _dedupe(queries)
 
 

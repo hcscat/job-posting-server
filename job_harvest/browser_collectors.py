@@ -9,6 +9,7 @@ from urllib.parse import parse_qsl, quote, urlencode, urljoin, urlparse, urlunpa
 from job_harvest.browser_runtime import BrowserSession, browser_runtime_available
 from job_harvest.config import AppConfig
 from job_harvest.models import SearchHit, SiteDefinition
+from job_harvest.query_planner import has_active_filters
 from job_harvest.raw_store import RawSnapshotStore
 from job_harvest.search import collapse_whitespace, normalize_url
 
@@ -473,7 +474,7 @@ def parse_blind_job_cards(
 
 
 def build_jobplanet_requests(config: AppConfig, terms: list[str]) -> list[tuple[str, str]]:
-    if config.search.crawl_strategy == "query_search" and terms:
+    if (config.search.crawl_strategy == "query_search" or has_active_filters(config.criteria)) and terms:
         requests_to_run: list[tuple[str, str]] = []
         for term in terms:
             requests_to_run.append(
@@ -514,7 +515,7 @@ def build_rocketpunch_queries(
     config: AppConfig,
     terms: list[str],
 ) -> list[tuple[str, str]]:
-    if config.search.crawl_strategy == "query_search":
+    if config.search.crawl_strategy == "query_search" or has_active_filters(config.criteria):
         return [(term, term) for term in dedupe_terms(terms)]
 
     queries: list[tuple[str, str]] = [("__browser_all__", "")]
@@ -527,7 +528,7 @@ def build_blind_queries(
     config: AppConfig,
     terms: list[str],
 ) -> list[tuple[str, str]]:
-    if config.search.crawl_strategy == "query_search":
+    if config.search.crawl_strategy == "query_search" or has_active_filters(config.criteria):
         base_terms = dedupe_terms(terms)
     else:
         preferred = list(BLIND_BROAD_TERMS)

@@ -113,4 +113,6 @@ OpenAI 정리를 사용하려면:
 ## 프로젝트 문서
 
 - 프로젝트 정체성 문서: [docs/project-identity.ko.md](./docs/project-identity.ko.md)
+- 채용 사이트 조회 조건 조사: [docs/research/job-site-filters.ko.md](./docs/research/job-site-filters.ko.md)
+- 필터 표준화 코드 맵: [job_harvest/filter_taxonomy.py](./job_harvest/filter_taxonomy.py)
 - 에이전트 스킬 팩: [agent-pack/README.md](./agent-pack/README.md)

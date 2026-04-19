@@ -40,6 +40,9 @@ class ServerTest(unittest.TestCase):
                 settings = client.get("/api/settings").json()
                 settings["site_keys"] = ["saramin", "jobkorea"]
                 settings["crawl_terms"] = ["frontend", "backend"]
+                settings["industries"] = ["핀테크"]
+                settings["skills"] = ["React", "TypeScript"]
+                settings["workplace_types"] = ["원격"]
                 settings["ai_provider"] = "heuristic"
                 settings["ai_model"] = ""
                 settings["browser_enabled"] = True
@@ -51,6 +54,9 @@ class ServerTest(unittest.TestCase):
                 payload = response.json()
                 self.assertEqual(payload["site_keys"], ["saramin", "jobkorea"])
                 self.assertEqual(payload["crawl_terms"], ["frontend", "backend"])
+                self.assertEqual(payload["industries"], ["핀테크"])
+                self.assertEqual(payload["skills"], ["React", "TypeScript"])
+                self.assertEqual(payload["workplace_types"], ["원격"])
                 self.assertEqual(payload["ai_provider"], "heuristic")
                 self.assertTrue(payload["browser_enabled"])
                 self.assertTrue(payload["browser_headless"])

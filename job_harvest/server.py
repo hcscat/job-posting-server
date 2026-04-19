@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from job_harvest.config import STRICT_MATCHABLE_FIELDS
 from job_harvest.database import create_database_manager, init_database
 from job_harvest.i18n import (
     LANG_COOKIE_NAME,
@@ -288,15 +289,7 @@ def create_app(
             title_key="settings.page_title",
             settings_json=json.dumps(settings_payload.model_dump(), ensure_ascii=False),
             available_sites=available_sites,
-            strict_groups=[
-                "roles",
-                "keywords",
-                "locations",
-                "companies",
-                "experience_levels",
-                "education_levels",
-                "employment_types",
-            ],
+            strict_groups=list(STRICT_MATCHABLE_FIELDS),
         )
 
     @app.get("/jobs", response_class=HTMLResponse)

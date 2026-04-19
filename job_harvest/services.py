@@ -108,6 +108,26 @@ class SettingsService:
                 "education_levels": payload.education_levels,
                 "employment_types": payload.employment_types,
                 "required_terms": payload.required_terms,
+                "industries": payload.industries,
+                "salary_ranges": payload.salary_ranges,
+                "company_types": payload.company_types,
+                "company_sizes": payload.company_sizes,
+                "position_levels": payload.position_levels,
+                "majors": payload.majors,
+                "certifications": payload.certifications,
+                "preferred_conditions": payload.preferred_conditions,
+                "welfare": payload.welfare,
+                "skills": payload.skills,
+                "tags": payload.tags,
+                "workplace_types": payload.workplace_types,
+                "date_posted": payload.date_posted,
+                "deadline": payload.deadline,
+                "easy_apply": payload.easy_apply,
+                "applicant_signals": payload.applicant_signals,
+                "network_signals": payload.network_signals,
+                "leader_positions": payload.leader_positions,
+                "headhunting": payload.headhunting,
+                "theme_tags": payload.theme_tags,
                 "extra_terms": payload.extra_terms,
                 "strict_match_groups": payload.strict_match_groups,
             },
@@ -142,6 +162,26 @@ class SettingsService:
                 education_levels=payload["criteria"]["education_levels"],
                 employment_types=payload["criteria"]["employment_types"],
                 required_terms=payload["criteria"]["required_terms"],
+                industries=payload["criteria"].get("industries", []),
+                salary_ranges=payload["criteria"].get("salary_ranges", []),
+                company_types=payload["criteria"].get("company_types", []),
+                company_sizes=payload["criteria"].get("company_sizes", []),
+                position_levels=payload["criteria"].get("position_levels", []),
+                majors=payload["criteria"].get("majors", []),
+                certifications=payload["criteria"].get("certifications", []),
+                preferred_conditions=payload["criteria"].get("preferred_conditions", []),
+                welfare=payload["criteria"].get("welfare", []),
+                skills=payload["criteria"].get("skills", []),
+                tags=payload["criteria"].get("tags", []),
+                workplace_types=payload["criteria"].get("workplace_types", []),
+                date_posted=payload["criteria"].get("date_posted", []),
+                deadline=payload["criteria"].get("deadline", []),
+                easy_apply=payload["criteria"].get("easy_apply", []),
+                applicant_signals=payload["criteria"].get("applicant_signals", []),
+                network_signals=payload["criteria"].get("network_signals", []),
+                leader_positions=payload["criteria"].get("leader_positions", []),
+                headhunting=payload["criteria"].get("headhunting", []),
+                theme_tags=payload["criteria"].get("theme_tags", []),
                 extra_terms=payload["criteria"]["extra_terms"],
                 strict_match_groups=payload["criteria"]["strict_match_groups"],
                 max_results_per_site=payload["search"]["max_results_per_site"],
@@ -184,6 +224,26 @@ class SettingsService:
             education_levels=list(record.education_levels),
             employment_types=list(record.employment_types),
             required_terms=list(record.required_terms),
+            industries=list(record.industries),
+            salary_ranges=list(record.salary_ranges),
+            company_types=list(record.company_types),
+            company_sizes=list(record.company_sizes),
+            position_levels=list(record.position_levels),
+            majors=list(record.majors),
+            certifications=list(record.certifications),
+            preferred_conditions=list(record.preferred_conditions),
+            welfare=list(record.welfare),
+            skills=list(record.skills),
+            tags=list(record.tags),
+            workplace_types=list(record.workplace_types),
+            date_posted=list(record.date_posted),
+            deadline=list(record.deadline),
+            easy_apply=list(record.easy_apply),
+            applicant_signals=list(record.applicant_signals),
+            network_signals=list(record.network_signals),
+            leader_positions=list(record.leader_positions),
+            headhunting=list(record.headhunting),
+            theme_tags=list(record.theme_tags),
             extra_terms=list(record.extra_terms),
             strict_match_groups=list(record.strict_match_groups),
             max_results_per_site=record.max_results_per_site,
@@ -224,6 +284,26 @@ class SettingsService:
         record.education_levels = list(payload.education_levels)
         record.employment_types = list(payload.employment_types)
         record.required_terms = list(payload.required_terms)
+        record.industries = list(payload.industries)
+        record.salary_ranges = list(payload.salary_ranges)
+        record.company_types = list(payload.company_types)
+        record.company_sizes = list(payload.company_sizes)
+        record.position_levels = list(payload.position_levels)
+        record.majors = list(payload.majors)
+        record.certifications = list(payload.certifications)
+        record.preferred_conditions = list(payload.preferred_conditions)
+        record.welfare = list(payload.welfare)
+        record.skills = list(payload.skills)
+        record.tags = list(payload.tags)
+        record.workplace_types = list(payload.workplace_types)
+        record.date_posted = list(payload.date_posted)
+        record.deadline = list(payload.deadline)
+        record.easy_apply = list(payload.easy_apply)
+        record.applicant_signals = list(payload.applicant_signals)
+        record.network_signals = list(payload.network_signals)
+        record.leader_positions = list(payload.leader_positions)
+        record.headhunting = list(payload.headhunting)
+        record.theme_tags = list(payload.theme_tags)
         record.extra_terms = list(payload.extra_terms)
         record.strict_match_groups = list(payload.strict_match_groups)
         record.max_results_per_site = payload.max_results_per_site
@@ -377,8 +457,13 @@ class CollectorService:
                         JobPostingRecord.title.ilike(like),
                         JobPostingRecord.company.ilike(like),
                         JobPostingRecord.location.ilike(like),
+                        JobPostingRecord.employment_type.ilike(like),
+                        JobPostingRecord.experience_level.ilike(like),
+                        JobPostingRecord.education_level.ilike(like),
                         JobPostingRecord.summary.ilike(like),
+                        JobPostingRecord.description.ilike(like),
                         JobPostingRecord.ai_summary.ilike(like),
+                        JobPostingRecord.ai_job_family.ilike(like),
                     )
                 )
             if site:

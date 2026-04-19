@@ -14,8 +14,9 @@ import requests
 from bs4 import BeautifulSoup
 
 from job_harvest.browser_collectors import BROWSER_SITE_KEYS, discover_site_hits_with_browser
-from job_harvest.config import AppConfig, build_queries
+from job_harvest.config import AppConfig
 from job_harvest.models import SearchHit, SiteDefinition
+from job_harvest.query_planner import build_site_query_plan, has_active_filters, normalize_terms
 from job_harvest.raw_store import RawSnapshotStore
 from job_harvest.search import collapse_whitespace, dedupe_hits, normalize_url, search_site
 from job_harvest.sites import resolve_sites
@@ -68,29 +69,37 @@ def discover_job_hits(
     raw_store: RawSnapshotStore,
 ) -> DiscoveryExecution:
     sites = resolve_sites(config.search.sites)
-    terms = build_discovery_terms(config)
     hits: list[SearchHit] = []
+    queries: list[str] = []
     listing_pages_fetched = 0
     listing_snapshot_count = 0
     raw_bytes_written = 0
-    location_hint = next(iter(config.criteria.locations), None) or "South Korea"
 
     for site in sites:
+        query_plan = build_site_query_plan(
+            site_key=site.key,
+            criteria=config.criteria,
+            crawl_strategy=config.search.crawl_strategy,
+            crawl_terms=config.search.crawl_terms,
+            manual_queries=config.search.queries,
+        )
         site_execution = discover_site_hits(
             config=config,
             session=session,
             raw_store=raw_store,
             site=site,
-            terms=terms,
-            location_hint=location_hint,
+            terms=list(query_plan.queries),
+            location_hint=query_plan.location_hint or "South Korea",
+            site_has_active_filters=bool(query_plan.active_fields),
         )
         hits.extend(site_execution.hits)
+        queries.extend(query_plan.queries)
         listing_pages_fetched += site_execution.listing_pages_fetched
         listing_snapshot_count += site_execution.listing_snapshot_count
         raw_bytes_written += site_execution.raw_bytes_written
 
     return DiscoveryExecution(
-        queries=terms,
+        queries=normalize_terms(queries),
         hits=hits,
         deduped_hits=dedupe_hits(hits),
         listing_pages_fetched=listing_pages_fetched,
@@ -101,7 +110,19 @@ def discover_job_hits(
 
 def build_discovery_terms(config: AppConfig) -> list[str]:
     if config.search.crawl_strategy == "query_search":
-        return build_queries(config.criteria, config.search.queries)
+        return normalize_terms(list(config.search.queries))
+    if has_active_filters(config.criteria):
+        combined_terms: list[str] = []
+        for site_key in config.search.sites:
+            plan = build_site_query_plan(
+                site_key=site_key,
+                criteria=config.criteria,
+                crawl_strategy=config.search.crawl_strategy,
+                crawl_terms=config.search.crawl_terms,
+                manual_queries=config.search.queries,
+            )
+            combined_terms.extend(plan.queries)
+        return normalize_terms(combined_terms)
     return dedupe_terms(config.search.crawl_terms)
 
 
@@ -128,6 +149,7 @@ def discover_site_hits(
     site: SiteDefinition,
     terms: list[str],
     location_hint: str | None,
+    site_has_active_filters: bool,
 ) -> SiteDiscoveryExecution:
     if site.key in BROWSER_SITE_KEYS:
         browser_execution = discover_site_hits_with_browser(
@@ -146,6 +168,13 @@ def discover_site_hits(
             )
 
     if site.key in SITEMAP_DISCOVERY_SOURCES:
+        if site_has_active_filters and terms:
+            return discover_site_hits_with_fallback_search(
+                config=config,
+                session=session,
+                site=site,
+                terms=terms,
+            )
         return discover_site_hits_from_sitemaps(
             session=session,
             raw_store=raw_store,

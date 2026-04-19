@@ -17,6 +17,7 @@ from job_harvest.extract import (
     fetch_job_details,
 )
 from job_harvest.models import JobPosting, SearchHit
+from job_harvest.query_planner import get_active_filter_fields, get_criteria_values, has_active_filters
 from job_harvest.raw_store import RawSnapshotStore
 from job_harvest.storage import persist_run
 
@@ -238,14 +239,14 @@ def split_hits_for_detail_refresh(
 
 
 def is_relevant_posting(posting: JobPosting, config: AppConfig) -> bool:
-    if config.search.crawl_strategy == "broad_it_scan":
+    if config.search.crawl_strategy == "broad_it_scan" and not has_active_filters(config.criteria):
         return posting.is_it_job
     return posting.is_it_job and matches_criteria(posting, config)
 
 
 def matches_criteria(posting: JobPosting, config: AppConfig) -> bool:
     criteria = config.criteria
-    haystack = " ".join(
+    overall_haystack = " ".join(
         [
             posting.title,
             posting.search_title,
@@ -267,27 +268,66 @@ def matches_criteria(posting: JobPosting, config: AppConfig) -> bool:
             " ".join(posting.ai_benefits),
         ]
     ).casefold()
+    field_haystacks = build_field_haystacks(posting, overall_haystack)
 
     for term in criteria.exclude_keywords:
-        if term.casefold() in haystack:
+        if term.casefold() in overall_haystack:
             return False
 
     for term in criteria.required_terms:
-        if term.casefold() not in haystack:
+        if term.casefold() not in overall_haystack:
             return False
 
-    groups = {
-        "roles": criteria.roles,
-        "keywords": criteria.keywords,
-        "locations": criteria.locations,
-        "companies": criteria.companies,
-        "experience_levels": criteria.experience_levels,
-        "education_levels": criteria.education_levels,
-        "employment_types": criteria.employment_types,
-    }
-    for group_name in criteria.strict_match_groups:
-        values = groups.get(group_name, [])
-        if values and not any(value.casefold() in haystack for value in values):
+    strict_groups = set(criteria.strict_match_groups)
+    for field_name in get_active_filter_fields(criteria):
+        values = get_criteria_values(criteria, field_name)
+        target_haystack = (
+            field_haystacks.get(field_name, overall_haystack)
+            if field_name in strict_groups
+            else overall_haystack
+        )
+        if values and not any(value.casefold() in target_haystack for value in values):
             return False
 
     return True
+
+
+def build_field_haystacks(posting: JobPosting, overall_haystack: str) -> dict[str, str]:
+    tags_text = " ".join(posting.tags).casefold()
+    tech_stack_text = " ".join(posting.ai_tech_stack).casefold()
+    requirements_text = " ".join(posting.ai_requirements).casefold()
+    benefits_text = " ".join(posting.ai_benefits).casefold()
+    responsibilities_text = " ".join(posting.ai_responsibilities).casefold()
+    title_text = " ".join([posting.title, posting.search_title, posting.page_title]).casefold()
+    summary_text = " ".join([posting.summary, posting.ai_summary, posting.ai_relevance_reason]).casefold()
+    description_text = " ".join([posting.description, summary_text, responsibilities_text, requirements_text, benefits_text]).casefold()
+
+    return {
+        "roles": " ".join([title_text, posting.ai_job_family, tags_text, description_text]).casefold(),
+        "keywords": overall_haystack,
+        "locations": " ".join([posting.location, posting.ai_work_model, description_text]).casefold(),
+        "companies": posting.company.casefold(),
+        "experience_levels": " ".join([posting.experience_level, posting.ai_seniority, description_text]).casefold(),
+        "education_levels": " ".join([posting.education_level, description_text]).casefold(),
+        "employment_types": " ".join([posting.employment_type, posting.ai_work_model, description_text]).casefold(),
+        "industries": " ".join([tags_text, summary_text, description_text]).casefold(),
+        "salary_ranges": " ".join([summary_text, description_text]).casefold(),
+        "company_types": " ".join([summary_text, description_text]).casefold(),
+        "company_sizes": " ".join([summary_text, description_text]).casefold(),
+        "position_levels": " ".join([title_text, posting.ai_seniority, description_text]).casefold(),
+        "majors": description_text,
+        "certifications": description_text,
+        "preferred_conditions": description_text,
+        "welfare": " ".join([benefits_text, description_text]).casefold(),
+        "skills": " ".join([tech_stack_text, tags_text, requirements_text, description_text]).casefold(),
+        "tags": " ".join([tags_text, tech_stack_text, description_text]).casefold(),
+        "workplace_types": " ".join([posting.ai_work_model, posting.location, description_text]).casefold(),
+        "date_posted": " ".join([posting.date_posted, posting.pub_date, description_text]).casefold(),
+        "deadline": " ".join([posting.valid_through, description_text]).casefold(),
+        "easy_apply": overall_haystack,
+        "applicant_signals": overall_haystack,
+        "network_signals": overall_haystack,
+        "leader_positions": " ".join([title_text, summary_text, description_text]).casefold(),
+        "headhunting": overall_haystack,
+        "theme_tags": " ".join([tags_text, summary_text, description_text]).casefold(),
+    }
