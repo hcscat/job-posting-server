@@ -9,13 +9,16 @@ from threading import Lock, Thread
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import func, or_, select
 
+from job_harvest.candidate_profile import build_profile_collection_settings, build_profile_context
 from job_harvest.config import AppConfig, build_config, config_to_dict, load_config
 from job_harvest.database import DatabaseManager
 from job_harvest.db_models import AppSettingsRecord, CollectionRunRecord, JobPostingRecord, utcnow
 from job_harvest.extract import DetailFetchResult
+from job_harvest.profile_fit import attach_profile_fit, is_recommended_fit
 from job_harvest.request_parser import interpret_collection_request
 from job_harvest.runner import collect_postings
 from job_harvest.schemas import (
+    CandidateProfileRead,
     DashboardSummaryRead,
     RequestInterpretRead,
     SchedulerJobRead,
@@ -142,6 +145,20 @@ class SettingsService:
             },
         }
         return build_config(config_dict, base_dir=".", source="database")
+
+    def get_profile_context(self) -> CandidateProfileRead:
+        return CandidateProfileRead.model_validate(build_profile_context())
+
+    def get_profile_settings_payload(self) -> SettingsPayload:
+        current = self.get_payload()
+        merged = {
+            **current.model_dump(),
+            **build_profile_collection_settings(output_dir=current.output_dir),
+        }
+        return SettingsPayload.model_validate(merged)
+
+    def apply_profile_settings(self) -> SettingsPayload:
+        return self.update_settings(self.get_profile_settings_payload())
 
     def _bootstrap_payload(self) -> SettingsPayload:
         if self._bootstrap_config_path.exists():
@@ -443,9 +460,12 @@ class CollectorService:
         page_size: int = 25,
         it_only: bool = True,
         job_family: str = "",
+        recommended_only: bool = False,
+        sort: str = "profile_fit",
     ) -> JobListPage:
         safe_page = max(1, page)
         safe_page_size = max(1, min(page_size, 200))
+        sort_key = sort if sort in {"latest", "profile_fit", "company", "site"} else "profile_fit"
         with self._db.session_factory() as session:
             stmt = select(JobPostingRecord)
             if it_only:
@@ -474,13 +494,56 @@ class CollectorService:
                 stmt = stmt.where(JobPostingRecord.location.ilike(f"%{location.strip()}%"))
             if job_family:
                 stmt = stmt.where(JobPostingRecord.ai_job_family == job_family)
-
-            count_stmt = select(func.count()).select_from(stmt.subquery())
-            total = int(session.scalar(count_stmt) or 0)
-            stmt = stmt.order_by(JobPostingRecord.last_seen_at.desc())
-            stmt = stmt.offset((safe_page - 1) * safe_page_size).limit(safe_page_size)
             items = list(session.scalars(stmt).all())
-            return JobListPage(items=items, total=total, page=safe_page, page_size=safe_page_size)
+
+        for item in items:
+            attach_profile_fit(item)
+
+        if recommended_only:
+            items = [item for item in items if is_recommended_fit(int(getattr(item, "profile_fit_score", 0) or 0))]
+
+        if sort_key == "profile_fit":
+            items = sorted(
+                items,
+                key=lambda item: (
+                    int(getattr(item, "profile_fit_score", 0) or 0),
+                    _sort_datetime(item.last_seen_at),
+                    _sort_text(item.title or item.search_title),
+                ),
+                reverse=True,
+            )
+        elif sort_key == "company":
+            items = sorted(items, key=lambda item: _sort_datetime(item.last_seen_at), reverse=True)
+            items = sorted(
+                items,
+                key=lambda item: (
+                    _sort_text(item.company),
+                    _sort_text(item.title or item.search_title),
+                ),
+            )
+        elif sort_key == "site":
+            items = sorted(items, key=lambda item: _sort_datetime(item.last_seen_at), reverse=True)
+            items = sorted(
+                items,
+                key=lambda item: (
+                    _sort_text(item.site_key or item.site_name),
+                    _sort_text(item.title or item.search_title),
+                ),
+            )
+        else:
+            items = sorted(
+                items,
+                key=lambda item: (
+                    _sort_datetime(item.last_seen_at),
+                    int(getattr(item, "profile_fit_score", 0) or 0),
+                ),
+                reverse=True,
+            )
+
+        total = len(items)
+        start = (safe_page - 1) * safe_page_size
+        end = start + safe_page_size
+        return JobListPage(items=items[start:end], total=total, page=safe_page, page_size=safe_page_size)
 
     def list_runs(self, limit: int = 50) -> list[CollectionRunRecord]:
         with self._db.session_factory() as session:
@@ -790,3 +853,11 @@ def _parse_iso_datetime(value: str) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed
+
+
+def _sort_datetime(value: datetime | None) -> datetime:
+    return value or datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _sort_text(value: str | None) -> str:
+    return " ".join((value or "").split()).casefold()

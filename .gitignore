@@ -7,3 +7,4 @@ config.yaml
 data/
 output/
 tmp/
+portfolio_profile_base_*.md

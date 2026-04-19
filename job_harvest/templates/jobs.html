@@ -1,15 +1,116 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="hero compact">
+{% set profile_data = profile or {} %}
+{% set profile_headline = profile_data.get('headline') or profile_data.get('title') or profile_data.get('role') or profile_data.get('summary') %}
+{% set profile_summary = profile_data.get('summary') or profile_data.get('about') or profile_data.get('recommendation_basis') %}
+{% set profile_roles = profile_data.get('target_roles') or profile_data.get('roles') or profile_data.get('job_families') or [] %}
+{% set profile_skills = profile_data.get('strong_skills') or profile_data.get('skills') or profile_data.get('core_skills') or profile_data.get('tech_stack') or [] %}
+{% set profile_locations = profile_data.get('locations') or profile_data.get('preferred_locations') or [] %}
+{% set profile_focus = profile_data.get('target_domains') or profile_data.get('focus_points') or profile_data.get('recommendation_points') or profile_data.get('strengths') or [] %}
+{% set active_sort = filters.sort or 'profile_fit' %}
+
+<section class="hero compact jobs-hero">
   <div>
     <p class="eyebrow">{{ tr('jobs.eyebrow') }}</p>
     <h1>{{ tr('jobs.hero_title') }}</h1>
     <p class="hero-copy">{{ tr('jobs.hero_copy', total=total) }}</p>
   </div>
+  <div class="hero-actions jobs-hero-actions">
+    {% if filters.recommended_only %}
+    <span class="pill success">{{ tr('jobs.recommended_only') }}</span>
+    {% endif %}
+    <span class="pill">{{ tr('jobs.sort_label') }}: {{ tr('jobs.sort_option.' ~ active_sort) }}</span>
+  </div>
+</section>
+
+<section class="jobs-overview">
+  <article class="panel profile-panel">
+    <div class="panel-header compact-header">
+      <div>
+        <p class="eyebrow">{{ tr('jobs.profile_panel_eyebrow') }}</p>
+        <h2>{{ tr('jobs.profile_panel_title') }}</h2>
+      </div>
+      {% if filters.recommended_only %}
+      <span class="fit-badge fit-high">{{ tr('jobs.recommended_only') }}</span>
+      {% endif %}
+    </div>
+    {% if profile_headline %}
+    <p class="profile-headline">{{ profile_headline }}</p>
+    {% endif %}
+    <p class="subtle profile-copy">
+      {{ profile_summary or tr('jobs.profile_panel_fallback') }}
+    </p>
+    <div class="profile-summary-grid">
+      <section class="profile-summary-card">
+        <h3>{{ tr('jobs.profile_roles') }}</h3>
+        <div class="chip-list">
+          {% for item in profile_roles[:6] %}
+          <span class="chip">{{ item }}</span>
+          {% else %}
+          <span class="subtle">{{ tr('common.not_available') }}</span>
+          {% endfor %}
+        </div>
+      </section>
+      <section class="profile-summary-card">
+        <h3>{{ tr('jobs.profile_skills') }}</h3>
+        <div class="chip-list">
+          {% for item in profile_skills[:8] %}
+          <span class="chip">{{ item }}</span>
+          {% else %}
+          <span class="subtle">{{ tr('common.not_available') }}</span>
+          {% endfor %}
+        </div>
+      </section>
+      <section class="profile-summary-card">
+        <h3>{{ tr('jobs.profile_locations') }}</h3>
+        <div class="chip-list">
+          {% for item in profile_locations[:4] %}
+          <span class="chip">{{ item }}</span>
+          {% else %}
+          <span class="subtle">{{ tr('common.not_available') }}</span>
+          {% endfor %}
+        </div>
+      </section>
+      <section class="profile-summary-card">
+        <h3>{{ tr('jobs.profile_focus') }}</h3>
+        <ul class="profile-list">
+          {% for item in profile_focus[:4] %}
+          <li>{{ item }}</li>
+          {% else %}
+          <li class="subtle">{{ tr('jobs.profile_focus_fallback') }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+    </div>
+  </article>
+
+  <article class="panel recommendation-panel">
+    <div class="panel-header compact-header">
+      <div>
+        <p class="eyebrow">{{ tr('jobs.recommendation_panel_eyebrow') }}</p>
+        <h2>{{ tr('jobs.recommendation_panel_title') }}</h2>
+      </div>
+    </div>
+    <div class="recommendation-metrics">
+      <div class="recommendation-metric">
+        <span class="label">{{ tr('jobs.recommended_only') }}</span>
+        <strong>{{ filters.recommended_only and tr('jobs.recommendation_state_on') or tr('jobs.recommendation_state_off') }}</strong>
+      </div>
+      <div class="recommendation-metric">
+        <span class="label">{{ tr('jobs.sort_label') }}</span>
+        <strong>{{ tr('jobs.sort_option.' ~ active_sort) }}</strong>
+      </div>
+    </div>
+    <ul class="note-list">
+      <li>{{ tr('jobs.recommendation_note_primary') }}</li>
+      <li>{{ tr('jobs.recommendation_note_secondary') }}</li>
+      <li>{{ tr('jobs.recommendation_note_detail') }}</li>
+    </ul>
+  </article>
 </section>
 
 <section class="panel">
-  <form class="filter-bar" method="get" action="/jobs">
+  <form class="filter-bar jobs-filter-bar" method="get" action="/jobs">
     <input type="text" name="q" value="{{ filters.q }}" placeholder="{{ tr('jobs.search_placeholder') }}">
     <select name="site">
       <option value="">{{ tr('jobs.all_sites') }}</option>
@@ -25,21 +126,37 @@
     </select>
     <input type="text" name="company" value="{{ filters.company }}" placeholder="{{ tr('jobs.company_placeholder') }}">
     <input type="text" name="location" value="{{ filters.location }}" placeholder="{{ tr('jobs.location_placeholder') }}">
-    <label class="toggle">
-      <input type="checkbox" name="it_only" value="true" {% if filters.it_only %}checked{% endif %}>
-      {{ tr('jobs.it_only') }}
-    </label>
-    <button class="button primary" type="submit">{{ tr('jobs.apply') }}</button>
+    <div class="filter-actions">
+      <label class="toggle">
+        <input type="checkbox" name="it_only" value="true" {% if filters.it_only %}checked{% endif %}>
+        {{ tr('jobs.it_only') }}
+      </label>
+      <label class="toggle">
+        <input type="checkbox" name="recommended_only" value="true" {% if filters.recommended_only %}checked{% endif %}>
+        {{ tr('jobs.recommended_only') }}
+      </label>
+      <label class="field-inline">
+        <span>{{ tr('jobs.sort_label') }}</span>
+        <select name="sort">
+          <option value="latest" {% if active_sort == 'latest' %}selected{% endif %}>{{ tr('jobs.sort_option.latest') }}</option>
+          <option value="profile_fit" {% if active_sort == 'profile_fit' %}selected{% endif %}>{{ tr('jobs.sort_option.profile_fit') }}</option>
+          <option value="company" {% if active_sort == 'company' %}selected{% endif %}>{{ tr('jobs.sort_option.company') }}</option>
+          <option value="site" {% if active_sort == 'site' %}selected{% endif %}>{{ tr('jobs.sort_option.site') }}</option>
+        </select>
+      </label>
+      <button class="button primary" type="submit">{{ tr('jobs.apply') }}</button>
+    </div>
   </form>
 </section>
 
 <section class="panel">
   <div class="table-wrap">
-    <table>
+    <table class="jobs-table">
       <thead>
         <tr>
           <th>{{ tr('jobs.table.site') }}</th>
           <th>{{ tr('jobs.table.posting') }}</th>
+          <th>{{ tr('jobs.table.profile_fit') }}</th>
           <th>{{ tr('jobs.table.company') }}</th>
           <th>{{ tr('jobs.table.location') }}</th>
           <th>{{ tr('jobs.table.ai_classification') }}</th>
@@ -49,15 +166,53 @@
       </thead>
       <tbody id="jobs-table-body">
         {% for job in jobs %}
+        {% set fit_level = (job.profile_fit_level or 'unknown')|lower|replace(' ', '-') %}
+        {% set fit_key = 'jobs.fit_level.' ~ fit_level %}
+        {% set fit_label = tr(fit_key) %}
         <tr class="job-row" data-job-id="{{ job.id }}">
           <td>{{ site_label(job.site_key, job.site_name) }}</td>
           <td>
-            <button type="button" class="job-link detail-trigger" data-job-id="{{ job.id }}" aria-expanded="false">{{ job.title or job.search_title }}</button>
+            <button
+              type="button"
+              class="job-link detail-trigger"
+              data-job-id="{{ job.id }}"
+              data-fit-level="{{ fit_level }}"
+              data-fit-score="{{ job.profile_fit_score if job.profile_fit_score is not none else '' }}"
+              data-fit-reasons="{{ (job.profile_fit_reasons or [])|tojson|forceescape }}"
+              data-fit-highlights="{{ (job.profile_fit_highlights or [])|tojson|forceescape }}"
+              aria-expanded="false"
+            >{{ job.title or job.search_title }}</button>
             <div class="subtle"><a href="{{ job.url }}" target="_blank" rel="noreferrer">{{ tr('jobs.external_posting') }}</a></div>
             <div class="subtle">{{ job.employment_type or tr('common.not_available') }} / {{ job.experience_level or tr('common.not_available') }}</div>
             {% if job.ai_summary %}
             <div class="subtle">{{ job.ai_summary }}</div>
             {% endif %}
+          </td>
+          <td>
+            <div class="fit-stack">
+              <div class="fit-overview-inline">
+                <span class="fit-badge fit-{{ fit_level }}">{{ fit_label != fit_key and fit_label or (job.profile_fit_level or tr('jobs.fit_unavailable')) }}</span>
+                {% if job.profile_fit_score is not none %}
+                <strong class="fit-score">{{ job.profile_fit_score }}{{ tr('jobs.fit_score_unit') }}</strong>
+                {% endif %}
+              </div>
+              {% if job.profile_fit_reasons %}
+              <ul class="fit-reason-list">
+                {% for reason in job.profile_fit_reasons[:3] %}
+                <li>{{ reason }}</li>
+                {% endfor %}
+              </ul>
+              {% else %}
+              <p class="subtle">{{ tr('jobs.fit_reason_empty') }}</p>
+              {% endif %}
+              {% if job.profile_fit_highlights %}
+              <div class="chip-list fit-highlight-list">
+                {% for item in job.profile_fit_highlights[:3] %}
+                <span class="chip fit-chip">{{ item }}</span>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </div>
           </td>
           <td>{{ job.company or tr('common.not_available') }}</td>
           <td>{{ job.location or tr('common.not_available') }}</td>
@@ -70,11 +225,11 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="7" class="muted center">{{ tr('jobs.no_results') }}</td>
+          <td colspan="8" class="muted center">{{ tr('jobs.no_results') }}</td>
         </tr>
         {% endfor %}
         <tr id="job-detail-row" class="job-detail-inline-row is-hidden" data-job-id="">
-          <td colspan="7" class="detail-host-cell">
+          <td colspan="8" class="detail-host-cell">
             <section id="job-detail-drawer" class="panel detail-drawer is-hidden">
               <div class="panel-header">
                 <h2 id="job-detail-title">{{ tr('jobs.drawer_title') }}</h2>
@@ -85,6 +240,26 @@
               </div>
               <p id="job-detail-status" class="muted">{{ tr('jobs.drawer_placeholder') }}</p>
               <div id="job-detail-content" class="detail-drawer-content is-hidden">
+                <section class="detail-block fit-detail-block" id="job-detail-fit-block">
+                  <div class="fit-detail-header">
+                    <div>
+                      <h3>{{ tr('jobs.detail_fit_title') }}</h3>
+                      <p class="subtle">{{ tr('jobs.detail_fit_copy') }}</p>
+                    </div>
+                    <div id="job-detail-fit-badge" class="fit-overview-inline"></div>
+                  </div>
+                  <div class="fit-detail-grid">
+                    <div class="detail-list-section">
+                      <h4>{{ tr('jobs.detail_fit_reasons') }}</h4>
+                      <ul id="job-detail-fit-reasons" class="detail-list"></ul>
+                    </div>
+                    <div class="detail-list-section">
+                      <h4>{{ tr('jobs.detail_fit_highlights') }}</h4>
+                      <div id="job-detail-fit-highlights" class="chip-list"></div>
+                    </div>
+                  </div>
+                </section>
+
                 <div class="detail-drawer-grid">
                   <section class="detail-block">
                     <h3>{{ tr('jobs.normalized') }}</h3>
@@ -137,11 +312,123 @@
 
 <section class="pagination">
   {% if page > 1 %}
-  <a class="button ghost" href="/jobs?q={{ filters.q }}&site={{ filters.site }}&job_family={{ filters.job_family }}&company={{ filters.company }}&location={{ filters.location }}{% if filters.it_only %}&it_only=true{% endif %}&page={{ page - 1 }}&page_size={{ page_size }}">{{ tr('jobs.previous') }}</a>
+  <a class="button ghost" href="/jobs?q={{ filters.q }}&site={{ filters.site }}&job_family={{ filters.job_family }}&company={{ filters.company }}&location={{ filters.location }}{% if filters.it_only %}&it_only=true{% endif %}{% if filters.recommended_only %}&recommended_only=true{% endif %}&sort={{ active_sort }}&page={{ page - 1 }}&page_size={{ page_size }}">{{ tr('jobs.previous') }}</a>
   {% endif %}
   <span>{{ page }} / {{ total_pages }}</span>
   {% if page < total_pages %}
-  <a class="button ghost" href="/jobs?q={{ filters.q }}&site={{ filters.site }}&job_family={{ filters.job_family }}&company={{ filters.company }}&location={{ filters.location }}{% if filters.it_only %}&it_only=true{% endif %}&page={{ page + 1 }}&page_size={{ page_size }}">{{ tr('jobs.next') }}</a>
+  <a class="button ghost" href="/jobs?q={{ filters.q }}&site={{ filters.site }}&job_family={{ filters.job_family }}&company={{ filters.company }}&location={{ filters.location }}{% if filters.it_only %}&it_only=true{% endif %}{% if filters.recommended_only %}&recommended_only=true{% endif %}&sort={{ active_sort }}&page={{ page + 1 }}&page_size={{ page_size }}">{{ tr('jobs.next') }}</a>
   {% endif %}
 </section>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const detailElements = {
+      block: document.getElementById("job-detail-fit-block"),
+      badge: document.getElementById("job-detail-fit-badge"),
+      reasons: document.getElementById("job-detail-fit-reasons"),
+      highlights: document.getElementById("job-detail-fit-highlights"),
+      close: document.getElementById("job-detail-close"),
+    };
+
+    if (!detailElements.block || !detailElements.badge || !detailElements.reasons || !detailElements.highlights) {
+      return;
+    }
+
+    const fitLabels = {
+      high: {{ tr('jobs.fit_level.high')|tojson }},
+      medium: {{ tr('jobs.fit_level.medium')|tojson }},
+      low: {{ tr('jobs.fit_level.low')|tojson }},
+      none: {{ tr('jobs.fit_level.none')|tojson }},
+      unknown: {{ tr('jobs.fit_level.unknown')|tojson }},
+    };
+
+    const loadingText = {{ tr('jobs.profile_fit_loading')|tojson }};
+    const emptyReasonText = {{ tr('jobs.fit_reason_empty')|tojson }};
+    const emptyHighlightText = {{ tr('jobs.fit_highlight_empty')|tojson }};
+    const scoreUnit = {{ tr('jobs.fit_score_unit')|tojson }};
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function parseJsonAttribute(value) {
+      if (!value) return [];
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_error) {
+        return [];
+      }
+    }
+
+    function normalizeItems(items) {
+      return Array.isArray(items)
+        ? items.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+    }
+
+    function createBadgeMarkup(level, score) {
+      const normalizedLevel = String(level || "unknown").toLowerCase();
+      const label = fitLabels[normalizedLevel] || fitLabels.unknown;
+      const scoreMarkup = score !== null && score !== undefined && score !== ""
+        ? `<strong class="fit-score">${escapeHtml(score)}${escapeHtml(scoreUnit)}</strong>`
+        : "";
+      return `<span class="fit-badge fit-${escapeHtml(normalizedLevel)}">${escapeHtml(label)}</span>${scoreMarkup}`;
+    }
+
+    function renderProfileFit(detail) {
+      const reasons = normalizeItems(detail.profile_fit_reasons);
+      const highlights = normalizeItems(detail.profile_fit_highlights);
+      detailElements.badge.innerHTML = createBadgeMarkup(detail.profile_fit_level, detail.profile_fit_score);
+      detailElements.reasons.innerHTML = reasons.length
+        ? reasons.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+        : `<li class="subtle">${escapeHtml(emptyReasonText)}</li>`;
+      detailElements.highlights.innerHTML = highlights.length
+        ? highlights.map((item) => `<span class="chip fit-chip">${escapeHtml(item)}</span>`).join("")
+        : `<span class="subtle">${escapeHtml(emptyHighlightText)}</span>`;
+    }
+
+    function renderFromTrigger(button) {
+      renderProfileFit({
+        profile_fit_level: button.dataset.fitLevel || "unknown",
+        profile_fit_score: button.dataset.fitScore || "",
+        profile_fit_reasons: parseJsonAttribute(button.dataset.fitReasons),
+        profile_fit_highlights: parseJsonAttribute(button.dataset.fitHighlights),
+      });
+    }
+
+    async function refreshFromApi(jobId) {
+      detailElements.badge.innerHTML = createBadgeMarkup("unknown", "");
+      detailElements.reasons.innerHTML = `<li class="subtle">${escapeHtml(loadingText)}</li>`;
+      detailElements.highlights.innerHTML = `<span class="subtle">${escapeHtml(loadingText)}</span>`;
+
+      try {
+        const response = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
+        if (!response.ok) return;
+        const detail = await response.json();
+        renderProfileFit(detail);
+      } catch (_error) {
+        // Keep the optimistic row-level profile fit information if the refresh fails.
+      }
+    }
+
+    document.querySelectorAll(".detail-trigger").forEach((button) => {
+      button.addEventListener("click", () => {
+        renderFromTrigger(button);
+        refreshFromApi(button.dataset.jobId);
+      });
+    });
+
+    detailElements.close?.addEventListener("click", () => {
+      detailElements.badge.innerHTML = "";
+      detailElements.reasons.innerHTML = "";
+      detailElements.highlights.innerHTML = "";
+    });
+  });
+</script>
 {% endblock %}

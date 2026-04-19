@@ -1,5 +1,6 @@
 import json
 import unittest
+from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -266,6 +267,154 @@ class ServerTest(unittest.TestCase):
                 self.assertIn("Requirements", detail_payload["description"])
                 self.assertIn("Benefits", detail_payload["description"])
                 self.assertIn("Detail page capture was limited", detail_payload["description"])
+
+    def test_api_jobs_supports_recommended_only_and_profile_fit_sort(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            app = create_app(data_dir=temp_dir)
+            db = app.state.settings_service._db
+            now = utcnow()
+
+            with db.session_factory() as session:
+                high_fit_job = JobPostingRecord(
+                    normalized_url="https://example.com/jobs/java-backoffice",
+                    url="https://example.com/jobs/java-backoffice",
+                    site_key="saramin",
+                    site_name="Saramin",
+                    source_query="Java Spring 업무 시스템 개발자",
+                    title="Java Spring 업무 시스템 개발자",
+                    search_title="Java Spring 업무 시스템 개발자",
+                    company="Example SI",
+                    location="서울",
+                    employment_type="정규직",
+                    experience_level="3년 이상",
+                    education_level="무관",
+                    summary="공공 백오피스 운영개발 포지션",
+                    description="공공 백오피스 운영개발과 관리자 화면 개발을 수행합니다.",
+                    status_code=200,
+                    is_it_job=True,
+                    ai_provider="heuristic",
+                    ai_summary="Java Spring 기반 업무 시스템 백엔드/운영개발 포지션",
+                    ai_relevance_reason="Java, Spring, 백오피스, 운영개발 경험과 직접 맞닿아 있습니다.",
+                    ai_job_family="backend",
+                    ai_tech_stack=["Java", "Spring", "MyBatis", "Oracle"],
+                    ai_requirements=["Java", "Spring", "업무 시스템"],
+                    ai_responsibilities=["백오피스 운영개발", "관리자 화면 연계"],
+                    ai_benefits=["유연근무"],
+                    first_seen_at=now - timedelta(days=3),
+                    last_seen_at=now - timedelta(days=2),
+                    seen_count=1,
+                )
+                low_fit_job = JobPostingRecord(
+                    normalized_url="https://example.com/jobs/data-scientist",
+                    url="https://example.com/jobs/data-scientist",
+                    site_key="linkedin",
+                    site_name="LinkedIn",
+                    source_query="data scientist",
+                    title="Data Scientist",
+                    search_title="Data Scientist",
+                    company="ML Lab",
+                    location="서울",
+                    employment_type="정규직",
+                    experience_level="무관",
+                    education_level="석사 이상",
+                    summary="머신러닝 모델 개발 및 실험 자동화",
+                    description="머신러닝 모델 개발과 데이터 분석 전담 포지션",
+                    status_code=200,
+                    is_it_job=True,
+                    ai_provider="heuristic",
+                    ai_summary="머신러닝 모델링 중심 포지션",
+                    ai_relevance_reason="데이터 사이언스와 AI 리서치 성격이 강합니다.",
+                    ai_job_family="data",
+                    ai_tech_stack=["Python", "TensorFlow"],
+                    ai_requirements=["머신러닝", "Python"],
+                    ai_responsibilities=["모델 개발", "실험 자동화"],
+                    ai_benefits=["원격근무"],
+                    first_seen_at=now - timedelta(days=1),
+                    last_seen_at=now,
+                    seen_count=1,
+                )
+                session.add(high_fit_job)
+                session.add(low_fit_job)
+                session.commit()
+                session.refresh(high_fit_job)
+
+            with TestClient(app) as client:
+                profile_response = client.get("/api/profile")
+                self.assertEqual(profile_response.status_code, 200)
+                self.assertIn("Java", profile_response.json()["strong_skills"])
+
+                fit_sorted = client.get("/api/jobs?sort=profile_fit")
+                self.assertEqual(fit_sorted.status_code, 200)
+                fit_items = fit_sorted.json()["items"]
+                self.assertEqual(fit_items[0]["title"], "Java Spring 업무 시스템 개발자")
+                self.assertIn("profile_fit_score", fit_items[0])
+                self.assertIn("profile_fit_level", fit_items[0])
+                self.assertTrue(fit_items[0]["profile_fit_reasons"])
+
+                latest_sorted = client.get("/api/jobs?sort=latest")
+                self.assertEqual(latest_sorted.status_code, 200)
+                latest_items = latest_sorted.json()["items"]
+                self.assertEqual(latest_items[0]["title"], "Data Scientist")
+
+                recommended_only = client.get("/api/jobs?recommended_only=true&sort=profile_fit")
+                self.assertEqual(recommended_only.status_code, 200)
+                recommended_payload = recommended_only.json()
+                self.assertEqual(recommended_payload["total"], 1)
+                self.assertEqual(recommended_payload["items"][0]["title"], "Java Spring 업무 시스템 개발자")
+                self.assertGreaterEqual(recommended_payload["items"][0]["profile_fit_score"], 50)
+
+                detail_response = client.get(f"/api/jobs/{high_fit_job.id}")
+                self.assertEqual(detail_response.status_code, 200)
+                detail_payload = detail_response.json()
+                self.assertGreaterEqual(detail_payload["profile_fit_score"], 50)
+                self.assertIn("Java", detail_payload["profile_fit_highlights"])
+                self.assertIn("공공 백오피스 운영개발과 관리자 화면 개발을 수행합니다.", detail_payload["description"])
+
+    def test_jobs_page_renders_profile_fit_controls_and_datasets(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            app = create_app(data_dir=temp_dir)
+            db = app.state.settings_service._db
+
+            with db.session_factory() as session:
+                session.add(
+                    JobPostingRecord(
+                        normalized_url="https://example.com/jobs/ui5",
+                        url="https://example.com/jobs/ui5",
+                        site_key="wanted",
+                        site_name="Wanted",
+                        source_query="SAP UI5 개발",
+                        title="SAP UI5 운영개발",
+                        search_title="SAP UI5 운영개발",
+                        company="Enterprise App Co",
+                        location="판교",
+                        employment_type="정규직",
+                        experience_level="5년 이상",
+                        summary="SAP UI5/Fiori 기반 운영개발",
+                        description="SAP UI5/Fiori 기반 운영개발과 유지보수",
+                        status_code=200,
+                        is_it_job=True,
+                        ai_provider="heuristic",
+                        ai_summary="SAP UI5/Fiori 운영개발 포지션",
+                        ai_job_family="frontend",
+                        ai_tech_stack=["JavaScript", "SAP UI5", "Fiori"],
+                        ai_requirements=["SAP UI5", "JavaScript"],
+                        ai_responsibilities=["운영개발"],
+                        first_seen_at=utcnow(),
+                        last_seen_at=utcnow(),
+                        seen_count=1,
+                    )
+                )
+                session.commit()
+
+            with TestClient(app) as client:
+                response = client.get("/jobs?lang=ko&recommended_only=true&sort=profile_fit")
+                self.assertEqual(response.status_code, 200)
+                self.assertIn('name="recommended_only"', response.text)
+                self.assertIn('value="profile_fit" selected', response.text)
+                self.assertIn("job-detail-fit-badge", response.text)
+                self.assertIn("data-fit-score=", response.text)
+                self.assertIn("data-fit-reasons=", response.text)
+                self.assertIn("사람인", response.text)
 
 
 if __name__ == "__main__":

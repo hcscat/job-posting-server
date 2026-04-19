@@ -219,6 +219,11 @@ class JobPostingRead(BaseModel):
     first_seen_at: datetime
     last_seen_at: datetime
     seen_count: int
+    profile_fit_score: int = 0
+    profile_fit_level: str = ""
+    profile_fit_reasons: list[str] = Field(default_factory=list)
+    profile_fit_highlights: list[str] = Field(default_factory=list)
+    profile_fit_cautions: list[str] = Field(default_factory=list)
 
 
 class JobListResponse(BaseModel):
@@ -282,6 +287,25 @@ class RequestInterpretRead(BaseModel):
     model: str
     notes: list[str]
     payload: SettingsPayload
+
+
+class CandidateProfileRead(BaseModel):
+    key: str
+    title: str
+    headline: str
+    summary: str
+    target_roles: list[str]
+    strong_skills: list[str]
+    support_skills: list[str]
+    target_domains: list[str]
+    preferred_job_families: list[str]
+    avoid_job_families: list[str]
+    avoid_keywords: list[str]
+    preferred_locations: list[str]
+    collection_queries: list[str]
+    collection_exclude_keywords: list[str]
+    source_document: str
+    source_document_exists: bool
 
 
 class SiteCountRead(BaseModel):

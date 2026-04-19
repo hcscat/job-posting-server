@@ -16,13 +16,17 @@ from job_harvest.config import STRICT_MATCHABLE_FIELDS
 from job_harvest.database import create_database_manager, init_database
 from job_harvest.i18n import (
     LANG_COOKIE_NAME,
+    build_site_labels,
     build_ui_messages,
     normalize_locale,
     resolve_locale,
     translate,
+    translate_site_name,
 )
+from job_harvest.profile_fit import attach_profile_fit
 from job_harvest.raw_store import RawSnapshotStore
 from job_harvest.schemas import (
+    CandidateProfileRead,
     CollectionRunRead,
     JobDetailRead,
     JobListResponse,
@@ -43,59 +47,6 @@ from job_harvest.sites import BEST_EFFORT_SITE_KEYS, DEFAULT_SITES
 
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).with_name("templates")))
-SITE_LABELS = {
-    "ko": {
-        "saramin": "사람인",
-        "jobkorea": "잡코리아",
-        "linkedin": "링크드인",
-        "wanted": "원티드",
-        "jumpit": "점핏",
-        "remember": "리멤버",
-        "jobplanet": "잡플래닛",
-        "rocketpunch": "로켓펀치",
-        "blind": "블라인드",
-    },
-    "en": {
-        "saramin": "Saramin",
-        "jobkorea": "JobKorea",
-        "linkedin": "LinkedIn",
-        "wanted": "Wanted",
-        "jumpit": "Jumpit",
-        "remember": "Remember",
-        "jobplanet": "JobPlanet",
-        "rocketpunch": "RocketPunch",
-        "blind": "Blind",
-    },
-}
-
-SITE_LABELS = {
-    "ko": {
-        "saramin": "\uc0ac\ub78c\uc778",
-        "jobkorea": "\uc7a1\ucf54\ub9ac\uc544",
-        "linkedin": "\ub9c1\ud06c\ub4dc\uc778",
-        "wanted": "\uc6d0\ud2f0\ub4dc",
-        "jumpit": "\uc810\ud54f",
-        "remember": "\ub9ac\uba64\ubc84",
-        "jobplanet": "\uc7a1\ud50c\ub798\ub2db",
-        "rocketpunch": "\ub85c\ucf13\ud380\uce58",
-        "blind": "\ube14\ub77c\uc778\ub4dc",
-    },
-    "en": {
-        "saramin": "Saramin",
-        "jobkorea": "JobKorea",
-        "linkedin": "LinkedIn",
-        "wanted": "Wanted",
-        "jumpit": "Jumpit",
-        "remember": "Remember",
-        "jobplanet": "JobPlanet",
-        "rocketpunch": "RocketPunch",
-        "blind": "Blind",
-    },
-}
-
-
-def translate_site_label(locale: str, site_key: str, fallback: str = "") -> str:
-    return SITE_LABELS.get(locale, SITE_LABELS["en"]).get(site_key, fallback or site_key)
 
 
 # Some sites intermittently return mojibake; score repaired text before accepting it.
@@ -176,6 +127,7 @@ def _build_description_text(payload: dict[str, Any]) -> str:
 
 
 def _serialize_job_posting(item: Any) -> JobPostingRead:
+    attach_profile_fit(item)
     payload = JobPostingRead.model_validate(item).model_dump()
     payload = _repair_value(payload)
     payload["description"] = _build_description_text(payload)
@@ -183,6 +135,7 @@ def _serialize_job_posting(item: Any) -> JobPostingRead:
 
 
 def _serialize_job_detail(item: Any) -> JobDetailRead:
+    attach_profile_fit(item)
     payload = JobDetailRead.model_validate(item).model_dump()
     payload = _repair_value(payload)
     payload["description"] = _build_description_text(payload)
@@ -203,7 +156,7 @@ def _template_response(
         return translate(locale, key, **kwargs)
 
     def site_label(site_key: str, fallback: str = "") -> str:
-        return translate_site_label(locale, site_key, fallback)
+        return translate_site_name(locale, site_key, fallback)
 
     response = TEMPLATES.TemplateResponse(
         request=request,
@@ -214,7 +167,7 @@ def _template_response(
             "tr": tr,
             "site_label": site_label,
             "ui_messages_json": json.dumps(build_ui_messages(locale), ensure_ascii=False),
-            "site_labels_json": json.dumps(SITE_LABELS.get(locale, SITE_LABELS["en"]), ensure_ascii=False),
+            "site_labels_json": json.dumps(build_site_labels(locale), ensure_ascii=False),
             **context,
         },
     )
@@ -268,6 +221,7 @@ def create_app(
             name="dashboard.html",
             title_key="dashboard.page_title",
             summary=summary,
+            profile=settings_service.get_profile_context(),
             settings=settings_service.get_payload(),
         )
 
@@ -278,7 +232,7 @@ def create_app(
         available_sites = [
             {
                 "key": site.key,
-                "name": translate_site_label(locale, site.key, site.name),
+                "name": translate_site_name(locale, site.key, site.name),
                 "experimental": site.key in BEST_EFFORT_SITE_KEYS,
             }
             for site in DEFAULT_SITES.values()
@@ -289,6 +243,7 @@ def create_app(
             title_key="settings.page_title",
             settings_json=json.dumps(settings_payload.model_dump(), ensure_ascii=False),
             available_sites=available_sites,
+            profile=settings_service.get_profile_context(),
             strict_groups=list(STRICT_MATCHABLE_FIELDS),
         )
 
@@ -301,6 +256,8 @@ def create_app(
         location: str = "",
         it_only: bool = True,
         job_family: str = "",
+        recommended_only: bool = False,
+        sort: str = "profile_fit",
         page: int = 1,
         page_size: int = 50,
     ) -> HTMLResponse:
@@ -312,6 +269,8 @@ def create_app(
             location=location,
             it_only=it_only,
             job_family=job_family,
+            recommended_only=recommended_only,
+            sort=sort,
             page=page,
             page_size=page_size,
         )
@@ -332,11 +291,14 @@ def create_app(
                 "location": location,
                 "it_only": it_only,
                 "job_family": job_family,
+                "recommended_only": recommended_only,
+                "sort": sort,
             },
+            profile=settings_service.get_profile_context().model_dump(),
             available_sites=[
                 {
                     "key": site_item.key,
-                    "name": translate_site_label(locale, site_item.key, site_item.name),
+                    "name": translate_site_name(locale, site_item.key, site_item.name),
                 }
                 for site_item in DEFAULT_SITES.values()
             ],
@@ -356,6 +318,14 @@ def create_app(
     @app.get("/api/settings", response_model=SettingsPayload)
     async def get_settings() -> SettingsPayload:
         return settings_service.get_payload()
+
+    @app.get("/api/profile", response_model=CandidateProfileRead)
+    async def get_profile() -> CandidateProfileRead:
+        return settings_service.get_profile_context()
+
+    @app.post("/api/settings/profile-preset", response_model=SettingsPayload)
+    async def apply_profile_preset() -> SettingsPayload:
+        return settings_service.apply_profile_settings()
 
     @app.put("/api/settings", response_model=SettingsPayload)
     async def update_settings(payload: SettingsPayload) -> SettingsPayload:
@@ -385,6 +355,8 @@ def create_app(
         location: str = "",
         it_only: bool = True,
         job_family: str = "",
+        recommended_only: bool = False,
+        sort: str = "profile_fit",
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=50, ge=1, le=200),
     ) -> JobListResponse:
@@ -395,6 +367,8 @@ def create_app(
             location=location,
             it_only=it_only,
             job_family=job_family,
+            recommended_only=recommended_only,
+            sort=sort,
             page=page,
             page_size=page_size,
         )
